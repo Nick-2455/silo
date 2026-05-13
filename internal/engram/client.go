@@ -250,7 +250,11 @@ func (c *HTTPClient) doWithRetry(ctx context.Context, req *http.Request) (*http.
 		if errors.As(err, &retryErr) {
 			return nil, retryErr
 		}
-		return resp, nil
+		// Context cancelled, deadline exceeded, or unexpected error
+		if resp == nil {
+			return nil, err
+		}
+		return resp, err
 	}
 	return resp, nil
 }

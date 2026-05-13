@@ -27,10 +27,9 @@ func main() {
 	}
 	defer func() { _ = deps.Store.Close() }()
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
-
 	if *serverMode {
+		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer cancel()
 		if err := runServer(ctx, deps); err != nil {
 			fmt.Fprintf(os.Stderr, "server error: %v\n", err)
 			os.Exit(1)
@@ -38,13 +37,26 @@ func main() {
 		return
 	}
 
-	// TUI mode — launch Bubble Tea interface
+	// TUI mode — requires a terminal
+	if !isTerminal() {
+		fmt.Fprintln(os.Stderr, "marrow: TUI requires a terminal. Use --server for MCP stdio mode or --help for usage.")
+		os.Exit(1)
+	}
+
 	model := tui.NewModel(deps)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "tui error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func isTerminal() bool {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
 func runServer(ctx context.Context, deps *app.Deps) error {
