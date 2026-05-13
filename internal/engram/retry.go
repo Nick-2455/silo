@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	defaultMaxRetries  = 3
+	defaultMaxRetries   = 3
 	defaultInitialDelay = 1 * time.Second
 )
 
-// RetryFunc wraps an operation with exponential backoff.
+// Retry wraps an operation with exponential backoff.
 // Delays: 1s, 2s, 4s (max 3 retries).
 func Retry(ctx context.Context, op func() error) error {
 	return RetryWithConfig(ctx, op, defaultMaxRetries, defaultInitialDelay)

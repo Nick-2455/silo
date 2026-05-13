@@ -87,8 +87,7 @@ func createTestConfig(t *testing.T) string {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	config := `profile: test
-engram_api_url: http://localhost:9999
-engram_api_key: test-key
+engram_path: engram
 `
 	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)

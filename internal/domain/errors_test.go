@@ -15,8 +15,6 @@ func TestSentinelErrors(t *testing.T) {
 		want error
 	}{
 		{"ErrEngramUnreachable", domain.ErrEngramUnreachable, domain.ErrEngramUnreachable},
-		{"ErrAuth", domain.ErrAuth, domain.ErrAuth},
-		{"ErrRateLimited", domain.ErrRateLimited, domain.ErrRateLimited},
 		{"ErrNotFound", domain.ErrNotFound, domain.ErrNotFound},
 		{"ErrInvalidResponse", domain.ErrInvalidResponse, domain.ErrInvalidResponse},
 		{"ErrTriageNotFound", domain.ErrTriageNotFound, domain.ErrTriageNotFound},
@@ -60,29 +58,6 @@ func TestErrRetryExceeded(t *testing.T) {
 	}
 }
 
-func TestIsAuthError(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"direct auth", domain.ErrAuth, true},
-		{"wrapped auth", fmt.Errorf("wrapper: %w", domain.ErrAuth), true},
-		{"not auth", domain.ErrNotFound, false},
-		{"nil", nil, false},
-		{"random error", errors.New("something else"), false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := domain.IsAuthError(tt.err)
-			if got != tt.want {
-				t.Errorf("IsAuthError(%v) = %v, want %v", tt.err, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestIsNotFoundError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -93,7 +68,7 @@ func TestIsNotFoundError(t *testing.T) {
 		{"ErrTriageNotFound", domain.ErrTriageNotFound, true},
 		{"wrapped not found", fmt.Errorf("wrapper: %w", domain.ErrNotFound), true},
 		{"wrapped triage", fmt.Errorf("wrapper: %w", domain.ErrTriageNotFound), true},
-		{"not found", domain.ErrAuth, false},
+		{"not found", domain.ErrEngramUnreachable, false},
 		{"nil", nil, false},
 		{"random", errors.New("something else"), false},
 	}

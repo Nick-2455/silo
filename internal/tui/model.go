@@ -663,8 +663,7 @@ func (m *Model) viewConfig() string {
 		mask  bool
 	}{
 		{"Profile", m.config.Profile, false},
-		{"Engram API URL", m.config.EngramAPI, false},
-		{"Engram API Key", m.config.EngramKey, true},
+		{"Engram Path", m.config.EngramPath, false},
 		{"Triage Model", m.config.ModelPrefs.Triage, false},
 		{"Summary Model", m.config.ModelPrefs.Summary, false},
 	}
@@ -693,7 +692,7 @@ func (m *Model) handleConfigKey(msg tea.KeyMsg) tea.Cmd {
 			m.cursor--
 		}
 	case "down", "j":
-		if m.cursor < 4 {
+		if m.cursor < 3 {
 			m.cursor++
 		}
 	}
@@ -755,26 +754,32 @@ func (m *Model) header() string {
 }
 
 func (m *Model) footer() string {
+	var keys string
 	switch m.screen {
 	case ScreenDashboard:
-		return "d:dashboard  a:add  t:triage  c:config  q:quit"
+		keys = "↑/↓:navigate  enter:list  a:add  q:quit"
 	case ScreenList:
-		return "↑/↓:navigate  enter:triage  /:search  esc:back  q:quit"
+		keys = "↑/↓:navigate  enter:triage  /:search  esc:back  q:quit"
 	case ScreenAdd:
 		if m.addStep == 0 {
-			return "type URL  enter:next  esc:cancel  q:quit"
+			keys = "type URL  enter:next  esc:cancel  q:quit"
+		} else if m.addStep == 1 {
+			keys = "type title  enter:submit  esc:cancel  q:quit"
+		} else {
+			keys = "submitting..."
 		}
-		if m.addStep == 1 {
-			return "type title  enter:submit  esc:cancel  q:quit"
-		}
-		return "submitting..."
 	case ScreenTriage:
-		return "↑/↓:select bucket  enter:move  esc:back  q:quit"
+		keys = "↑/↓:select bucket  enter:move  esc:back  q:quit"
 	case ScreenConfig:
-		return "↑/↓:navigate  esc:back  q:quit"
+		keys = "↑/↓:navigate  esc:back  q:quit"
 	default:
-		return "q:quit"
+		keys = "q:quit"
 	}
+
+	if m.statusMsg != "" {
+		return keys + "  |  " + m.statusMsg
+	}
+	return keys
 }
 
 func truncate(s string, max int) string {

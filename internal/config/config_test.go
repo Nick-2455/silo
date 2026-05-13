@@ -26,9 +26,8 @@ func TestLoader_LoadSaveRoundTrip(t *testing.T) {
 	loader := config.NewLoader(path)
 
 	original := domain.Config{
-		Profile:   "test-profile",
-		EngramAPI: "http://test:9090",
-		EngramKey: "secret-key",
+		Profile:    "test-profile",
+		EngramPath: "/usr/local/bin/engram",
 	}
 	original.ModelPrefs.Triage = "gpt-4"
 	original.ModelPrefs.Summary = "gpt-3.5"
@@ -45,11 +44,8 @@ func TestLoader_LoadSaveRoundTrip(t *testing.T) {
 	if loaded.Profile != original.Profile {
 		t.Errorf("profile: got %q, want %q", loaded.Profile, original.Profile)
 	}
-	if loaded.EngramAPI != original.EngramAPI {
-		t.Errorf("engram_api: got %q, want %q", loaded.EngramAPI, original.EngramAPI)
-	}
-	if loaded.EngramKey != original.EngramKey {
-		t.Errorf("engram_key: got %q, want %q", loaded.EngramKey, original.EngramKey)
+	if loaded.EngramPath != original.EngramPath {
+		t.Errorf("engram_path: got %q, want %q", loaded.EngramPath, original.EngramPath)
 	}
 	if loaded.ModelPrefs.Triage != original.ModelPrefs.Triage {
 		t.Errorf("triage model: got %q, want %q", loaded.ModelPrefs.Triage, original.ModelPrefs.Triage)
@@ -62,7 +58,7 @@ func TestLoader_DefaultProfile(t *testing.T) {
 	loader := config.NewLoader(path)
 
 	// Write minimal config without profile
-	data := []byte("engram_api_url: http://test:8080\n")
+	data := []byte("engram_path: /usr/bin/engram\n")
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		t.Fatal(err)
 	}

@@ -85,9 +85,8 @@ func newTestDeps(t *testing.T) *app.Deps {
 
 	loader := &mockConfigLoader{
 		cfg: domain.Config{
-			Profile:   "test",
-			EngramAPI: "http://localhost:8080",
-			EngramKey: "test-key",
+			Profile:    "test",
+			EngramPath: "engram",
 		},
 		path: "/tmp/test-config.yaml",
 	}

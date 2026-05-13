@@ -22,7 +22,7 @@ type Deps struct {
 // Order of operations:
 //  1. Load configuration from disk
 //  2. Open SQLite database and run migrations
-//  3. Initialize Engram HTTP client
+//  3. Initialize Engram MCP client (stdio to engram binary)
 //  4. Return assembled deps
 func Bootstrap() (*Deps, error) {
 	// 1. Load config
@@ -50,8 +50,12 @@ func Bootstrap() (*Deps, error) {
 		return nil, fmt.Errorf("app: migrate store: %w", err)
 	}
 
-	// 3. Initialize Engram client
-	engramClient := engram.NewHTTPClient(cfg.EngramAPI, cfg.EngramKey)
+	// 3. Initialize Engram MCP client
+	engramClient, err := engram.NewClient(cfg.EngramPath)
+	if err != nil {
+		_ = s.Close()
+		return nil, fmt.Errorf("app: init engram client: %w", err)
+	}
 
 	return &Deps{
 		Config: cfg,

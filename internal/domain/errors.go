@@ -8,8 +8,6 @@ import (
 // Sentinel errors for Engram client operations.
 var (
 	ErrEngramUnreachable = errors.New("engram: service unreachable")
-	ErrAuth              = errors.New("engram: authentication failed")
-	ErrRateLimited       = errors.New("engram: rate limited")
 	ErrNotFound          = errors.New("engram: resource not found")
 	ErrInvalidResponse   = errors.New("engram: invalid response from server")
 )
@@ -38,11 +36,6 @@ func (e *ErrRetryExceeded) Error() string {
 
 func (e *ErrRetryExceeded) Unwrap() error {
 	return e.LastErr
-}
-
-// IsAuthError reports whether err is an authentication-related error.
-func IsAuthError(err error) bool {
-	return errors.Is(err, ErrAuth)
 }
 
 // IsNotFoundError reports whether err indicates a missing resource.

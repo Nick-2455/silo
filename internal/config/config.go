@@ -76,7 +76,7 @@ func (l *Loader) Path() string {
 func defaultConfig() domain.Config {
 	var cfg domain.Config
 	cfg.Profile = defaultProfile
-	cfg.EngramAPI = DefaultEngramAPIURL()
+	cfg.EngramPath = DefaultEngramPath()
 	return cfg
 }
 

@@ -33,8 +33,7 @@ type ConfigLoader interface {
 // Config holds Marrow configuration values.
 type Config struct {
 	Profile    string `yaml:"profile"`
-	EngramAPI  string `yaml:"engram_api_url"`
-	EngramKey  string `yaml:"engram_api_key"`
+	EngramPath string `yaml:"engram_path"`
 	ModelPrefs struct {
 		Triage  string `yaml:"triage"`
 		Summary string `yaml:"summary"`

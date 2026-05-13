@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	defaultEngramAPI = "http://localhost:8080"
+	defaultEngramPath = "engram"
 )
 
 // ConfigDir returns the XDG-compliant configuration directory for Marrow.
@@ -41,7 +41,7 @@ func DefaultDBPath() string {
 	return filepath.Join(DataDir(), "state.db")
 }
 
-// DefaultEngramAPIURL returns the default Engram API URL.
-func DefaultEngramAPIURL() string {
-	return defaultEngramAPI
+// DefaultEngramPath returns the default Engram binary path.
+func DefaultEngramPath() string {
+	return defaultEngramPath
 }
