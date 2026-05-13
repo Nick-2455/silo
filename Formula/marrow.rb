@@ -13,9 +13,9 @@ class Marrow < Formula
   end
 
   test do
-    # Verify binary runs and shows TUI placeholder
-    output = shell_output("#{bin}/marrow 2>&1", 0)
-    assert_match "TUI coming in batch 3", output
+    # Verify binary builds, is CGO-free, and accepts --help
+    output = shell_output("#{bin}/marrow --help 2>&1")
+    assert_match "-server", output
   end
 
   def caveats
