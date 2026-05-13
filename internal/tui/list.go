@@ -100,7 +100,7 @@ func (m *listModel) View() string {
 
 	// Resource list
 	if len(m.resources) == 0 {
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorMuted)).Render("No resources found"))
+		b.WriteString("No resources found")
 		b.WriteString("\n\n")
 		b.WriteString(HelpStyle.Render("Press 'f' to filter by bucket, '/' to search, 'n' to add"))
 		return b.String()

@@ -32,9 +32,7 @@ func (m *dashboardModel) Update(msg tea.Msg) (*dashboardModel, tea.Cmd) {
 func (m *dashboardModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(FormStyle.Render(
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorPrimary)).Render("Roadmap Dashboard"),
-	))
+	b.WriteString(FormStyle.Render("Roadmap Dashboard"))
 	b.WriteString("\n\n")
 
 	// Group resources by bucket
@@ -59,9 +57,7 @@ func (m *dashboardModel) View() string {
 
 		// Recent items
 		if count == 0 {
-			b.WriteString(DashItemStyle.Render(
-				lipgloss.NewStyle().Foreground(lipgloss.Color(ColorMuted)).Render("  (empty)"),
-			))
+			b.WriteString(DashItemStyle.Render("  (empty)"))
 		} else {
 			limit := recentItemsPerBucket
 			if count < limit {
@@ -77,9 +73,7 @@ func (m *dashboardModel) View() string {
 			}
 			if count > recentItemsPerBucket {
 				b.WriteString(DashItemStyle.Render(
-					lipgloss.NewStyle().Foreground(lipgloss.Color(ColorMuted)).Render(
-						fmt.Sprintf("  ... and %d more", count-recentItemsPerBucket),
-					),
+					fmt.Sprintf("  ... and %d more", count-recentItemsPerBucket),
 				))
 			}
 		}

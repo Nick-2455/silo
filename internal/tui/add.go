@@ -7,7 +7,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Nick-2455/marrow/internal/app"
 	"github.com/Nick-2455/marrow/internal/domain"
@@ -112,9 +111,7 @@ func (m *addModel) Update(msg tea.Msg) (*addModel, tea.Cmd) {
 func (m *addModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(FormStyle.Render(
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorPrimary)).Render("Add Resource"),
-	))
+	b.WriteString(FormStyle.Render("Add Resource"))
 	b.WriteString("\n\n")
 
 	// URL field

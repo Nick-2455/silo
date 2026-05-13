@@ -101,9 +101,7 @@ func (m *configScreenModel) Update(msg tea.Msg) (*configScreenModel, tea.Cmd) {
 func (m *configScreenModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(FormStyle.Render(
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorPrimary)).Render("Configuration"),
-	))
+	b.WriteString(FormStyle.Render("Configuration"))
 	b.WriteString("\n\n")
 
 	fields := []configField{
@@ -130,12 +128,7 @@ func (m *configScreenModel) View() string {
 
 		row := lipgloss.JoinHorizontal(lipgloss.Left, key, " ", value)
 		if m.cursor == f && !m.editing {
-			row = lipgloss.NewStyle().
-				Background(lipgloss.Color(ColorSurface)).
-				Border(lipgloss.NormalBorder(), false, false, false, true).
-				BorderForeground(lipgloss.Color(ColorPrimary)).
-				Padding(0, 1).
-				Render(row)
+			row = "> " + row
 		}
 
 		b.WriteString(row)

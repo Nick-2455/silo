@@ -454,7 +454,7 @@ func toLower(s string) string {
 }
 
 func (m *Model) renderHeader() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorPrimary)).Render("marrow")
+	title := "marrow"
 	screen := screenNames[m.screen]
 
 	parts := []string{title, screen}

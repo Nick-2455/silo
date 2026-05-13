@@ -100,15 +100,13 @@ func (m *triageModel) Update(msg tea.Msg) (*triageModel, tea.Cmd) {
 func (m *triageModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(FormStyle.Render(
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorPrimary)).Render("Triage"),
-	))
+	b.WriteString(FormStyle.Render("Triage"))
 	b.WriteString("\n\n")
 
 	switch m.state {
 	case triageStateSelect:
 		if len(m.resources) == 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorMuted)).Render("No resources to triage"))
+			b.WriteString("No resources to triage")
 			b.WriteString("\n\n")
 			b.WriteString(HelpStyle.Render("Add resources first, then return here"))
 			return b.String()
