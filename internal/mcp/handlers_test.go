@@ -15,7 +15,7 @@ import (
 type mockEngramClient struct {
 	createResourceFn func(ctx context.Context, r domain.Resource) (string, error)
 	searchFn         func(ctx context.Context, query string) ([]domain.Resource, error)
-	roadmapFn        func(ctx context.Context) (map[domain.Bucket][]domain.Resource, error)
+	getResourceFn    func(ctx context.Context, id string) (domain.Resource, error)
 	updateFn         func(ctx context.Context, id string, updates map[string]any) error
 	isReachableFn    func(ctx context.Context) bool
 }
@@ -28,19 +28,15 @@ func (m *mockEngramClient) CreateResource(ctx context.Context, r domain.Resource
 }
 
 func (m *mockEngramClient) GetResource(ctx context.Context, id string) (domain.Resource, error) {
+	if m.getResourceFn != nil {
+		return m.getResourceFn(ctx, id)
+	}
 	return domain.Resource{}, nil
 }
 
 func (m *mockEngramClient) SearchResources(ctx context.Context, query string) ([]domain.Resource, error) {
 	if m.searchFn != nil {
 		return m.searchFn(ctx, query)
-	}
-	return nil, nil
-}
-
-func (m *mockEngramClient) GetRoadmap(ctx context.Context) (map[domain.Bucket][]domain.Resource, error) {
-	if m.roadmapFn != nil {
-		return m.roadmapFn(ctx)
 	}
 	return nil, nil
 }
@@ -63,6 +59,7 @@ func (m *mockEngramClient) IsReachable(ctx context.Context) bool {
 type mockStore struct {
 	getTriageFn    func(ctx context.Context, resourceID string) (domain.TriagePosition, error)
 	setTriageFn    func(ctx context.Context, pos domain.TriagePosition) error
+	getAllFn       func(ctx context.Context) ([]domain.TriagePosition, error)
 	getCacheFn     func(ctx context.Context, query string) ([]domain.Resource, bool, error)
 	cacheSearchFn  func(ctx context.Context, query string, results []domain.Resource) error
 	invalidCacheFn func(ctx context.Context) error
@@ -83,6 +80,9 @@ func (m *mockStore) SetTriagePosition(ctx context.Context, pos domain.TriagePosi
 }
 
 func (m *mockStore) GetAllTriagePositions(ctx context.Context) ([]domain.TriagePosition, error) {
+	if m.getAllFn != nil {
+		return m.getAllFn(ctx)
+	}
 	return nil, nil
 }
 
@@ -244,22 +244,21 @@ func TestHandleAddResource_Success(t *testing.T) {
 }
 
 func TestHandleGetRoadmap_Success(t *testing.T) {
-	roadmap := map[domain.Bucket][]domain.Resource{
-		domain.BucketInbox: {
-			{ID: "1", Title: "New Resource", Bucket: domain.BucketInbox},
-		},
-		domain.BucketActive:  {},
-		domain.BucketLater:   {},
-		domain.BucketArchived: {},
-	}
-
 	handlerDeps = &Deps{
 		Engram: &mockEngramClient{
-			roadmapFn: func(ctx context.Context) (map[domain.Bucket][]domain.Resource, error) {
-				return roadmap, nil
+			getResourceFn: func(ctx context.Context, id string) (domain.Resource, error) {
+				return domain.Resource{
+					ID: id, Title: "New Resource", URL: "https://example.com", Bucket: domain.BucketInbox,
+				}, nil
 			},
 		},
-		Store: &mockStore{},
+		Store: &mockStore{
+			getAllFn: func(ctx context.Context) ([]domain.TriagePosition, error) {
+				return []domain.TriagePosition{
+					{ResourceID: "1", Bucket: domain.BucketInbox},
+				}, nil
+			},
+		},
 	}
 
 	req := mcp.CallToolRequest{}
@@ -284,11 +283,17 @@ func TestHandleGetRoadmap_Success(t *testing.T) {
 func TestHandleGetRoadmap_EngramDown(t *testing.T) {
 	handlerDeps = &Deps{
 		Engram: &mockEngramClient{
-			roadmapFn: func(ctx context.Context) (map[domain.Bucket][]domain.Resource, error) {
-				return nil, domain.ErrEngramUnreachable
+			getResourceFn: func(ctx context.Context, id string) (domain.Resource, error) {
+				return domain.Resource{}, domain.ErrEngramUnreachable
 			},
 		},
-		Store: &mockStore{},
+		Store: &mockStore{
+			getAllFn: func(ctx context.Context) ([]domain.TriagePosition, error) {
+				return []domain.TriagePosition{
+					{ResourceID: "1", Bucket: domain.BucketInbox},
+				}, nil
+			},
+		},
 	}
 
 	req := mcp.CallToolRequest{}

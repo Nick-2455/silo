@@ -112,25 +112,28 @@ func handleAddResource(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 
 // handleGetRoadmap returns all resources grouped by bucket.
 func handleGetRoadmap(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	roadmap, err := handlerDeps.Engram.GetRoadmap(ctx)
+	// Get all triage positions from local SQLite
+	positions, err := handlerDeps.Store.GetAllTriagePositions(ctx)
 	if err != nil {
-		// Return empty structure with error context
-		empty := make(map[domain.Bucket][]domain.Resource)
-		for _, b := range domain.AllBuckets() {
-			empty[b] = []domain.Resource{}
-		}
-		data, _ := json.Marshal(map[string]any{
-			"buckets": empty,
-			"error":   fmt.Sprintf("Engram unreachable: %v", err),
-		})
-		return mcp.NewToolResultText(string(data)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to load triage positions: %v", err)), nil
 	}
 
-	// Ensure all buckets are present
+	roadmap := make(map[domain.Bucket][]domain.Resource)
 	for _, b := range domain.AllBuckets() {
-		if _, ok := roadmap[b]; !ok {
-			roadmap[b] = []domain.Resource{}
+		roadmap[b] = []domain.Resource{}
+	}
+
+	for _, pos := range positions {
+		r := domain.Resource{
+			ID:     pos.ResourceID,
+			Bucket: pos.Bucket,
 		}
+		// Try to get full resource from Engram
+		full, err := handlerDeps.Engram.GetResource(ctx, pos.ResourceID)
+		if err == nil {
+			r = full
+		}
+		roadmap[r.Bucket] = append(roadmap[r.Bucket], r)
 	}
 
 	data, err := json.MarshalIndent(roadmap, "", "  ")

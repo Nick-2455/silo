@@ -120,39 +120,6 @@ func (c *MCPClient) SearchResources(ctx context.Context, query string) ([]domain
 	return parseSearchResults(extractText(result))
 }
 
-// GetRoadmap returns all resources grouped by bucket.
-func (c *MCPClient) GetRoadmap(ctx context.Context) (map[domain.Bucket][]domain.Resource, error) {
-	// Search for all resources — use "*" as wildcard to match everything
-	result, err := c.callTool(ctx, "mem_search", map[string]any{
-		"query":   "*",
-		"project": "marrow",
-		"type":    "resource",
-		"limit":   500,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	resources, err := parseSearchResults(extractText(result))
-	if err != nil {
-		return nil, err
-	}
-
-	roadmap := make(map[domain.Bucket][]domain.Resource)
-	for _, b := range domain.AllBuckets() {
-		roadmap[b] = []domain.Resource{}
-	}
-	for _, r := range resources {
-		if r.Bucket != "" {
-			roadmap[r.Bucket] = append(roadmap[r.Bucket], r)
-		} else {
-			roadmap[domain.BucketInbox] = append(roadmap[domain.BucketInbox], r)
-		}
-	}
-
-	return roadmap, nil
-}
-
 // UpdateResource updates fields of an existing resource via mem_update.
 func (c *MCPClient) UpdateResource(ctx context.Context, id string, updates map[string]any) error {
 	// Build a content JSON string from the updates

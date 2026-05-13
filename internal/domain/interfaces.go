@@ -7,7 +7,6 @@ type EngramClient interface {
 	CreateResource(ctx context.Context, r Resource) (string, error)
 	GetResource(ctx context.Context, id string) (Resource, error)
 	SearchResources(ctx context.Context, query string) ([]Resource, error)
-	GetRoadmap(ctx context.Context) (map[Bucket][]Resource, error)
 	UpdateResource(ctx context.Context, id string, updates map[string]any) error
 	IsReachable(ctx context.Context) bool
 }
