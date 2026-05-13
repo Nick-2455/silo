@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -56,7 +57,7 @@ func (c *HTTPClient) CreateResource(ctx context.Context, r domain.Resource) (str
 		return "", fmt.Errorf("engram: create request: %w", err)
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.doWithRetry(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +78,7 @@ func (c *HTTPClient) GetResource(ctx context.Context, id string) (domain.Resourc
 		return domain.Resource{}, fmt.Errorf("engram: create request: %w", err)
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.doWithRetry(ctx, req)
 	if err != nil {
 		return domain.Resource{}, err
 	}
@@ -103,7 +104,7 @@ func (c *HTTPClient) SearchResources(ctx context.Context, query string) ([]domai
 	q.Set("q", query)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := c.do(req)
+	resp, err := c.doWithRetry(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +130,7 @@ func (c *HTTPClient) GetRoadmap(ctx context.Context) (map[domain.Bucket][]domain
 		return nil, fmt.Errorf("engram: create request: %w", err)
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.doWithRetry(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +168,7 @@ func (c *HTTPClient) UpdateResource(ctx context.Context, id string, updates map[
 		return fmt.Errorf("engram: create request: %w", err)
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.doWithRetry(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -187,7 +188,7 @@ func (c *HTTPClient) IsReachable(ctx context.Context) bool {
 		return false
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.doWithRetry(ctx, req)
 	if err != nil {
 		return false
 	}
@@ -196,8 +197,8 @@ func (c *HTTPClient) IsReachable(ctx context.Context) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// do executes an HTTP request with auth headers and error handling.
-func (c *HTTPClient) do(req *http.Request) (*http.Response, error) {
+// doOnce executes an HTTP request with auth headers and error handling (no retry).
+func (c *HTTPClient) doOnce(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -224,6 +225,33 @@ func (c *HTTPClient) do(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("%w: status %d: %s", domain.ErrInvalidResponse, resp.StatusCode, string(body))
 	}
 
+	return resp, nil
+}
+
+// doWithRetry executes an HTTP request with exponential backoff on transient errors.
+// Does NOT retry on auth, not-found, or rate-limit errors.
+func (c *HTTPClient) doWithRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	err := Retry(ctx, func() error {
+		var rErr error
+		resp, rErr = c.doOnce(req)
+		if rErr == nil {
+			return nil
+		}
+		if errors.Is(rErr, domain.ErrAuth) || errors.Is(rErr, domain.ErrNotFound) || errors.Is(rErr, domain.ErrRateLimited) {
+			// Non-retryable — wrap so Retry will propagate it immediately
+			return fmt.Errorf("non-retryable: %w", rErr)
+		}
+		return rErr
+	})
+	if err != nil {
+		// Unwrap non-retryable errors to preserve original sentinel
+		var retryErr *RetryExceededError
+		if errors.As(err, &retryErr) {
+			return nil, retryErr
+		}
+		return resp, nil
+	}
 	return resp, nil
 }
 
