@@ -69,6 +69,15 @@ func (s *Store) GetCachedSearch(_ context.Context, query string) ([]domain.Resou
 	return resources, true, nil
 }
 
+// InvalidateSearchCache clears all cached search results.
+func (s *Store) InvalidateSearchCache(_ context.Context) error {
+	_, err := s.db.Exec(`DELETE FROM search_cache`)
+	if err != nil {
+		return fmt.Errorf("store: invalidate search cache: %w", err)
+	}
+	return nil
+}
+
 // EvictExpiredCache removes all expired cache entries.
 func (s *Store) EvictExpiredCache() error {
 	now := time.Now().Unix()

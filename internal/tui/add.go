@@ -183,6 +183,9 @@ func (m *addModel) submitCmd() tea.Cmd {
 			return submitMsg{err: err}
 		}
 
+		// Invalidate search cache so new resource appears immediately
+		_ = m.deps.Store.InvalidateSearchCache(ctx)
+
 		return submitMsg{id: id}
 	}
 }

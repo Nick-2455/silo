@@ -19,6 +19,7 @@ type ResourceStore interface {
 	GetAllTriagePositions(ctx context.Context) ([]TriagePosition, error)
 	CacheSearch(ctx context.Context, query string, results []Resource) error
 	GetCachedSearch(ctx context.Context, query string) ([]Resource, bool, error)
+	InvalidateSearchCache(ctx context.Context) error
 	Close() error
 }
 

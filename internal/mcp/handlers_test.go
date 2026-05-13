@@ -65,6 +65,7 @@ type mockStore struct {
 	setTriageFn    func(ctx context.Context, pos domain.TriagePosition) error
 	getCacheFn     func(ctx context.Context, query string) ([]domain.Resource, bool, error)
 	cacheSearchFn  func(ctx context.Context, query string, results []domain.Resource) error
+	invalidCacheFn func(ctx context.Context) error
 }
 
 func (m *mockStore) GetTriagePosition(ctx context.Context, resourceID string) (domain.TriagePosition, error) {
@@ -100,6 +101,13 @@ func (m *mockStore) GetCachedSearch(ctx context.Context, query string) ([]domain
 }
 
 func (m *mockStore) Close() error {
+	return nil
+}
+
+func (m *mockStore) InvalidateSearchCache(ctx context.Context) error {
+	if m.invalidCacheFn != nil {
+		return m.invalidCacheFn(ctx)
+	}
 	return nil
 }
 

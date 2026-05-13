@@ -98,6 +98,9 @@ func handleAddResource(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 		return mcp.NewToolResultError(fmt.Sprintf("created in Engram (id=%s) but failed to set local triage: %v", id, err)), nil
 	}
 
+	// Invalidate search cache so new resource appears immediately
+	_ = handlerDeps.Store.InvalidateSearchCache(ctx)
+
 	result := map[string]any{
 		"id":     id,
 		"bucket": string(domain.BucketInbox),
