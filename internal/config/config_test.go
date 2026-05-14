@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Nick-2455/marrow/internal/config"
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/config"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
 func TestLoader_LoadNotFound(t *testing.T) {
@@ -100,7 +100,7 @@ func TestXDGConfigHome(t *testing.T) {
 
 	os.Setenv("XDG_CONFIG_HOME", "/custom/xdg/config")
 	dir := config.ConfigDir()
-	expected := "/custom/xdg/config/marrow"
+	expected := "/custom/xdg/config/silo"
 	if dir != expected {
 		t.Errorf("config dir: got %q, want %q", dir, expected)
 	}
@@ -112,7 +112,7 @@ func TestXDGDataHome(t *testing.T) {
 
 	os.Setenv("XDG_DATA_HOME", "/custom/xdg/data")
 	dir := config.DataDir()
-	expected := "/custom/xdg/data/marrow"
+	expected := "/custom/xdg/data/silo"
 	if dir != expected {
 		t.Errorf("data dir: got %q, want %q", dir, expected)
 	}

@@ -2,7 +2,7 @@ package styles
 
 import "github.com/charmbracelet/lipgloss"
 
-// Marrow warm earth-tone palette.
+// Silo warm earth-tone palette.
 var (
 	ColorBase     = lipgloss.Color("#1e1e1e")
 	ColorSurface  = lipgloss.Color("#2a2a2a")

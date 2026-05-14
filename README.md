@@ -1,20 +1,20 @@
-# Marrow
+# Silo
 
 **Second brain for knowledge work.** Track what you learn, connect it to your projects, and build a living map of everything you know — not just a library of bookmarks.
 
-Marrow is a knowledge graph orchestrator: a TUI app + MCP server that helps you organize resources, track projects, extract learnings from work sessions, and sync your knowledge to Obsidian.
+Silo is a knowledge graph orchestrator: a TUI app + MCP server that helps you organize resources, track projects, extract learnings from work sessions, and sync your knowledge to Obsidian.
 
 ## Quick path
 
 ```bash
 # Install
-go install github.com/Nick-2455/marrow/cmd/marrow@latest
+go install github.com/Nick-2455/silo/cmd/silo@latest
 
 # Run the TUI
-marrow
+silo
 
 # Or run as MCP server (for AI agents to query your knowledge)
-marrow --server
+silo --server
 ```
 
 **[Engram](https://github.com/Gentleman-Programming/engram)** is required as the persistent memory backend. Install it first:
@@ -25,8 +25,8 @@ brew install gentleman-programming/tap/engram
 
 ## What it does
 
-| You do | Marrow does |
-|--------|-------------|
+| You do | Silo does |
+|--------|-----------|
 | Save a resource (URL, PDF, video) | Tags it by domain, places it in your roadmap |
 | Define your domains (Dev, Philosophy, Cinema) | Builds a taxonomy hierarchy (Domain → Subareas) |
 | Track active projects | Links projects to subareas, shows what you're working on |
@@ -34,7 +34,7 @@ brew install gentleman-programming/tap/engram
 | Review your learnings | Shows everything you've learned, filterable by domain |
 | Press `o` | Syncs your entire knowledge graph to Obsidian with wikilinks |
 
-Marrow is the orchestrator — **you** decide what matters, Marrow organizes it and keeps agents informed.
+Silo is the orchestrator — **you** decide what matters, Silo organizes it and keeps agents informed.
 
 ## Screens
 
@@ -66,11 +66,11 @@ Learning ──applies_to──▶ Project
 Resource ──references──▶ Subarea
 ```
 
-A single learning can connect to **multiple** subareas and projects. You debugged an MCP client bug in the `marrow` project and learned something that applies to both Backend and iOS.
+A single learning can connect to **multiple** subareas and projects. You debugged an MCP client bug in the `silo` project and learned something that applies to both Backend and iOS.
 
 ## ALM cycle
 
-Marrow moves knowledge through four phases:
+Silo moves knowledge through four phases:
 
 | Phase | What happens | Agent model |
 |-------|-------------|-------------|
@@ -83,7 +83,7 @@ The cycle is per-resource, not a linear pipeline. Resources flow through as you 
 
 ## MCP tools
 
-When running `marrow --server`, these tools are available to AI agents:
+When running `silo --server`, these tools are available to AI agents:
 
 | Tool | What it does |
 |------|-------------|
@@ -110,14 +110,14 @@ When running `marrow --server`, these tools are available to AI agents:
 
 Press `o` in the TUI. First run asks for your vault path — type it once, it's saved. Every sync after is one keystroke.
 
-Your graph appears under `Marrow/` in your vault:
+Your graph appears under `Silo/` in your vault:
 
 ```
-Marrow/
+Silo/
   Persona.md
   Domains/Dev.md
   Subareas/Backend.md
-  Projects/marrow.md
+  Projects/silo.md
   Sessions/Debug de Engram MCP client.md
   Learnings/mem_update reemplaza contenido entero.md
 ```
@@ -126,7 +126,7 @@ Files use YAML frontmatter and `[[wikilinks]]` — open Obsidian's graph view an
 
 ## Configuration
 
-`~/.config/marrow/config.yaml`:
+`~/.config/silo/config.yaml`:
 
 ```yaml
 profile: default
@@ -140,8 +140,8 @@ The vault path is set interactively — press `o`, type the path, press Enter. N
 
 ```
 TUI (Bubble Tea) ──▶ GraphStore (SQLite topology) 
-                  ──▶ Engram (MCP, durable content)
-                  
+                   ──▶ Engram (MCP, durable content)
+                   
 MCP Server ──▶ Same backend, exposes tools to agents
 
 Obsidian ◀── Syncer exports GraphStore as .md files
@@ -153,7 +153,7 @@ Obsidian ◀── Syncer exports GraphStore as .md files
 
 ## Contributing
 
-Marrow is a community product. The goal is a knowledge graph that works for anyone — not one person's specific taxonomy.
+Silo is a community product. The goal is a knowledge graph that works for anyone — not one person's specific taxonomy.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 

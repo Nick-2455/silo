@@ -12,7 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
 const (
@@ -47,7 +47,7 @@ func NewClient(engramPath string) (*MCPClient, error) {
 	initReq := mcp.InitializeRequest{}
 	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initReq.Params.ClientInfo = mcp.Implementation{
-		Name:    "marrow",
+		Name:    "silo",
 		Version: "0.1.0",
 	}
 
@@ -79,7 +79,7 @@ func (c *MCPClient) CreateResource(ctx context.Context, r domain.Resource) (stri
 		"title":   r.Title,
 		"content": string(contentBytes),
 		"type":    "resource",
-		"project": "marrow",
+		"project": "silo",
 	})
 	if err != nil {
 		return "", err
@@ -110,7 +110,7 @@ func (c *MCPClient) GetResource(ctx context.Context, id string) (domain.Resource
 func (c *MCPClient) SearchResources(ctx context.Context, query string) ([]domain.Resource, error) {
 	result, err := c.callTool(ctx, "mem_search", map[string]any{
 		"query":   query,
-		"project": "marrow",
+		"project": "silo",
 		"type":    "resource",
 		"limit":   50,
 	})
@@ -134,7 +134,7 @@ func (c *MCPClient) SaveNode(ctx context.Context, nodeType, title string, conten
 		"content":   string(contentBytes),
 		"type":      nodeType,
 		"topic_key": topicKey,
-		"project":   "marrow",
+		"project":   "silo",
 	})
 	if err != nil {
 		return "", err
@@ -168,7 +168,7 @@ func (c *MCPClient) UpdateNode(ctx context.Context, engramID string, content map
 func (c *MCPClient) SearchNodes(ctx context.Context, query, nodeType string) ([]domain.GraphNode, error) {
 	args := map[string]any{
 		"query":   query,
-		"project": "marrow",
+		"project": "silo",
 		"limit":   50,
 	}
 	if nodeType != "" {
@@ -282,7 +282,7 @@ func extractText(result *mcp.CallToolResult) string {
 // parseObservationID extracts an observation ID from mem_save response text.
 // Engram mem_save returns a JSON object with an "id" field:
 //
-//	{"id":131,"project":"marrow","result":"Memory saved: ..."}
+//	{"id":131,"project":"silo","result":"Memory saved: ..."}
 //
 // Falls back to extracting #<number> from plain text for older Engram versions.
 func parseObservationID(text string) string {
@@ -315,7 +315,7 @@ func parseObservationID(text string) string {
 }
 
 // parseResourceFromText parses a single resource from mem_get_observation response text.
-// The response is JSON: {"project":"marrow","result":"#131 [resource] prueba1\n{...}\n..."}
+// The response is JSON: {"project":"silo","result":"#131 [resource] prueba1\n{...}\n..."}
 func parseResourceFromText(text string) (domain.Resource, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -339,7 +339,7 @@ func parseResourceFromText(text string) (domain.Resource, error) {
 }
 
 // parseSearchResults parses mem_search text results into []domain.Resource.
-// The response text is a JSON object: {"project":"marrow","result":"Found N memories:\n\n..."}
+// The response text is a JSON object: {"project":"silo","result":"Found N memories:\n\n..."}
 // The result field contains memory blocks with ID, type, title, and content JSON.
 func parseSearchResults(text string) ([]domain.Resource, error) {
 	text = strings.TrimSpace(text)

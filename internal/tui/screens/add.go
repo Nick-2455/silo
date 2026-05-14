@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Nick-2455/marrow/internal/tui/styles"
+	"github.com/Nick-2455/silo/internal/tui/styles"
 )
 
 // RenderAdd renders the add resource form.

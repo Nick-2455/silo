@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
 var ErrEngramUnavailable = errors.New("engram: unavailable — running in degraded mode")

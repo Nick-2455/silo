@@ -33,18 +33,18 @@ type jsonRPCError struct {
 	Message string `json:"message"`
 }
 
-// buildBinary builds the marrow binary for testing.
+// buildBinary builds the silo binary for testing.
 func buildBinary(t *testing.T) string {
 	t.Helper()
 
 	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "marrow")
+	binPath := filepath.Join(tmpDir, "silo")
 
-	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/marrow")
+	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/silo")
 	cmd.Dir = filepath.Join(t.TempDir(), "..", "..")
-	// Find the actual marrow directory
-	marrowDir := findMarrowDir(t)
-	cmd.Dir = marrowDir
+	// Find the actual silo directory
+	siloDir := findSiloDir(t)
+	cmd.Dir = siloDir
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 
 	out, err := cmd.CombinedOutput()
@@ -55,7 +55,7 @@ func buildBinary(t *testing.T) string {
 	return binPath
 }
 
-func findMarrowDir(t *testing.T) string {
+func findSiloDir(t *testing.T) string {
 	t.Helper()
 
 	// Walk up from the test file to find go.mod
@@ -75,7 +75,7 @@ func findMarrowDir(t *testing.T) string {
 		dir = parent
 	}
 
-	t.Fatal("could not find marrow directory")
+	t.Fatal("could not find silo directory")
 	return ""
 }
 
@@ -108,7 +108,7 @@ func TestE2E_ServerStarts(t *testing.T) {
 	binPath := buildBinary(t)
 	configPath := createTestConfig(t)
 
-	// Set XDG config home so marrow uses our test config
+	// Set XDG config home so silo uses our test config
 	configDir := filepath.Dir(configPath)
 
 	cmd := exec.Command(binPath, "--server")

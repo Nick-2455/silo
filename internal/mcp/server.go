@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	serverName    = "marrow"
+	serverName    = "silo"
 	serverVersion = "0.1.0"
 )
 
@@ -251,10 +251,10 @@ func listPersonTool() mcp.Tool {
 
 func syncObsidianTool() mcp.Tool {
 	return mcp.NewTool("sync_obsidian",
-		mcp.WithDescription("Export the complete Marrow knowledge graph as markdown files with YAML frontmatter and wikilinks for Obsidian. Creates a Marrow/ directory structure under the specified vault path."),
+		mcp.WithDescription("Export the complete Silo knowledge graph as markdown files with YAML frontmatter and wikilinks for Obsidian. Creates a Silo/ directory structure under the specified vault path."),
 		mcp.WithString("vault_path",
 			mcp.Required(),
-			mcp.Description("Absolute path to the Obsidian vault root. The graph will be exported to VaultPath/Marrow/."),
+			mcp.Description("Absolute path to the Obsidian vault root. The graph will be exported to VaultPath/Silo/."),
 		),
 	)
 }

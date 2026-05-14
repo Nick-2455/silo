@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
 const cacheTTL = 5 * time.Minute

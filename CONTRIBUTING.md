@@ -1,10 +1,10 @@
 # Contributing
 
-Marrow is a community knowledge graph tool. Contributions that make it work for more people are welcome.
+Silo is a community knowledge graph tool. Contributions that make it work for more people are welcome.
 
 ## Principles
 
-- **Zero-config for basic use.** `go install` + `marrow` should work.
+- **Zero-config for basic use.** `go install` + `silo` should work.
 - **User-defined taxonomy.** No hardcoded domains. Everyone organizes knowledge differently.
 - **Graph-first.** Everything is a node or an edge. New features should connect to the graph.
 - **Engram is the source of truth.** Content lives in Engram. SQLite is the local cache.
@@ -12,9 +12,9 @@ Marrow is a community knowledge graph tool. Contributions that make it work for 
 ## Developing
 
 ```bash
-git clone https://github.com/Nick-2455/marrow
-cd marrow
-go build ./cmd/marrow
+git clone https://github.com/Nick-2455/silo
+cd silo
+go build ./cmd/silo
 go test ./...
 ```
 
@@ -24,7 +24,7 @@ Requires Engram installed and in PATH for integration tests.
 
 | Package | Role |
 |---------|------|
-| `cmd/marrow` | Entry point — TUI mode or `--server` MCP mode |
+| `cmd/silo` | Entry point — TUI mode or `--server` MCP mode |
 | `internal/domain` | Types, interfaces, errors — no dependencies |
 | `internal/store` | SQLite — graph topology (`graph_nodes`, `graph_edges`) and resource triage |
 | `internal/engram` | MCP stdio client to Engram — content CRUD |

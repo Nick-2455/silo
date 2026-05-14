@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/tui/styles"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/tui/styles"
 )
 
 // RenderDomainTree renders a hierarchical tree of domains and their subareas.

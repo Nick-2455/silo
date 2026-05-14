@@ -8,8 +8,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/obsidian"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/obsidian"
 )
 
 // handleListDomains returns all domains with their nested subareas.

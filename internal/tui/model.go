@@ -8,11 +8,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Nick-2455/marrow/internal/app"
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/obsidian"
-	"github.com/Nick-2455/marrow/internal/tui/screens"
-	"github.com/Nick-2455/marrow/internal/tui/styles"
+	"github.com/Nick-2455/silo/internal/app"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/obsidian"
+	"github.com/Nick-2455/silo/internal/tui/screens"
+	"github.com/Nick-2455/silo/internal/tui/styles"
 )
 
 const (
@@ -978,7 +978,7 @@ func (m *Model) tickCmd() tea.Cmd {
 // ── Rendering helpers ──────────────────────────────────────────────────────
 
 func (m *Model) header() string {
-	parts := []string{"marrow", screenNames[m.Screen]}
+	parts := []string{"silo", screenNames[m.Screen]}
 	if !m.EngramOK {
 		parts = append(parts, "[DEGRADED]")
 	}

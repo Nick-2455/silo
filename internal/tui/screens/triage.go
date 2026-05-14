@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/tui/styles"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/tui/styles"
 )
 
 // RenderTriage renders the triage screen for moving a resource between buckets.

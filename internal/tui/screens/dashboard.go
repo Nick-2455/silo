@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/tui/styles"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/tui/styles"
 )
 
 const maxDashItems = 5
@@ -14,7 +14,7 @@ const maxDashItems = 5
 func RenderDashboard(resources []domain.Resource, cursor int) string {
 	var b strings.Builder
 
-	b.WriteString(styles.TitleStyle.Render("marrow — Dashboard"))
+	b.WriteString(styles.TitleStyle.Render("silo — Dashboard"))
 	b.WriteString("\n\n")
 
 	// Group by bucket

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
 func TestUpsertNode_InsertAndGet(t *testing.T) {
@@ -155,7 +155,7 @@ func TestListNodesByType(t *testing.T) {
 		{EngramID: "d1", NodeType: domain.NodeTypeDomain, Title: "Backend", Active: true},
 		{EngramID: "d2", NodeType: domain.NodeTypeDomain, Title: "Frontend", Active: true},
 		{EngramID: "s1", NodeType: domain.NodeTypeSubarea, Title: "Go", Active: true},
-		{EngramID: "p1", NodeType: domain.NodeTypeProject, Title: "Marrow", Active: true},
+		{EngramID: "p1", NodeType: domain.NodeTypeProject, Title: "Silo", Active: true},
 	}
 	for _, n := range nodes {
 		if err := s.UpsertNode(ctx, n); err != nil {
@@ -393,7 +393,7 @@ func TestListActiveProjects(t *testing.T) {
 
 	// Create projects
 	for _, n := range []domain.GraphNode{
-		{EngramID: "p1", NodeType: domain.NodeTypeProject, Title: "Marrow", Active: true},
+		{EngramID: "p1", NodeType: domain.NodeTypeProject, Title: "Silo", Active: true},
 		{EngramID: "p2", NodeType: domain.NodeTypeProject, Title: "Old Project", Active: false},
 		{EngramID: "s1", NodeType: domain.NodeTypeSubarea, Title: "Go", Active: true},
 	} {
@@ -414,8 +414,8 @@ func TestListActiveProjects(t *testing.T) {
 	if len(projects) != 1 {
 		t.Fatalf("expected 1 active project, got %d", len(projects))
 	}
-	if projects[0].Name != "Marrow" {
-		t.Errorf("name: got %q, want %q", projects[0].Name, "Marrow")
+	if projects[0].Name != "Silo" {
+		t.Errorf("name: got %q, want %q", projects[0].Name, "Silo")
 	}
 	if !projects[0].Active {
 		t.Error("active: got false, want true")

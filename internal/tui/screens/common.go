@@ -3,7 +3,7 @@ package screens
 import (
 	"fmt"
 
-	"github.com/Nick-2455/marrow/internal/tui/styles"
+	"github.com/Nick-2455/silo/internal/tui/styles"
 )
 
 const maxTitleLen = 50

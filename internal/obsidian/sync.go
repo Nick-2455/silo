@@ -9,10 +9,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
-// Syncer exports the Marrow knowledge graph as markdown files
+// Syncer exports the Silo knowledge graph as markdown files
 // with YAML frontmatter and wikilinks for Obsidian.
 type Syncer struct {
 	Store     domain.GraphStore
@@ -26,7 +26,7 @@ type SyncReport struct {
 	Errors       []string `json:"errors,omitempty"`
 }
 
-// SyncAll exports the complete graph as markdown files under VaultPath/Marrow/.
+// SyncAll exports the complete graph as markdown files under VaultPath/Silo/.
 func (s *Syncer) SyncAll(ctx context.Context) (*SyncReport, error) {
 	if s.VaultPath == "" {
 		return nil, fmt.Errorf("no vault path configured")
@@ -35,7 +35,7 @@ func (s *Syncer) SyncAll(ctx context.Context) (*SyncReport, error) {
 	report := &SyncReport{}
 
 	// Create directory structure
-	base := filepath.Join(s.VaultPath, "Marrow")
+	base := filepath.Join(s.VaultPath, "Silo")
 	dirs := []string{
 		filepath.Join(base, "Domains"),
 		filepath.Join(base, "Subareas"),
@@ -249,7 +249,7 @@ func sanitizeFilename(name string) string {
 // filePath returns the full path for a markdown file in a subdirectory.
 func (s *Syncer) filePath(subdir, title string) string {
 	name := sanitizeFilename(title)
-	return filepath.Join(s.VaultPath, "Marrow", subdir, name+".md")
+	return filepath.Join(s.VaultPath, "Silo", subdir, name+".md")
 }
 
 // --- Markdown builders ---

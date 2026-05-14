@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Nick-2455/marrow/internal/engram"
+	"github.com/Nick-2455/silo/internal/engram"
 )
 
 func TestRetry_SucceedsImmediately(t *testing.T) {

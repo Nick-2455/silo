@@ -5,15 +5,15 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/store"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/store"
 )
 
 func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
 	// Use temp file instead of :memory: because WAL mode doesn't work
 	// properly with in-memory SQLite databases.
-	tmpFile, err := os.CreateTemp("", "marrow-test-*.db")
+	tmpFile, err := os.CreateTemp("", "silo-test-*.db")
 	if err != nil {
 		t.Fatalf("create temp db: %v", err)
 	}

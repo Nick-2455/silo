@@ -10,9 +10,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Nick-2455/marrow/internal/app"
-	"github.com/Nick-2455/marrow/internal/mcp"
-	"github.com/Nick-2455/marrow/internal/tui"
+	"github.com/Nick-2455/silo/internal/app"
+	"github.com/Nick-2455/silo/internal/mcp"
+	"github.com/Nick-2455/silo/internal/tui"
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
 
 	// TUI mode — requires a terminal
 	if !isTerminal() {
-		fmt.Fprintln(os.Stderr, "marrow: TUI requires a terminal. Use --server for MCP stdio mode or --help for usage.")
+		fmt.Fprintln(os.Stderr, "silo: TUI requires a terminal. Use --server for MCP stdio mode or --help for usage.")
 		os.Exit(1)
 	}
 

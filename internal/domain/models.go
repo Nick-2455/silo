@@ -30,7 +30,7 @@ func (b Bucket) Valid() bool {
 	return false
 }
 
-// Resource represents a knowledge resource tracked by Marrow.
+// Resource represents a knowledge resource tracked by Silo.
 type Resource struct {
 	ID        string    `json:"id"`
 	URL       string    `json:"url"`

@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/obsidian"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/obsidian"
 )
 
 // tickMsg triggers periodic health checks.

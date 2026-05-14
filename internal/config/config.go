@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	appName      = "marrow"
+	appName      = "silo"
 	configFile   = "config.yaml"
 	defaultProfile = "default"
 )

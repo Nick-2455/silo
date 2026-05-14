@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Nick-2455/marrow/internal/config"
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/engram"
-	"github.com/Nick-2455/marrow/internal/store"
+	"github.com/Nick-2455/silo/internal/config"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/engram"
+	"github.com/Nick-2455/silo/internal/store"
 )
 
 // Deps holds all initialized dependencies for the application.
@@ -105,8 +105,8 @@ func seedDemoData(ctx context.Context, deps *Deps) error {
 	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/filosofia/estoicismo", NodeType: domain.NodeTypeSubarea, Title: "Estoicismo", Active: true})
 	_ = store.AddEdge(ctx, filoID, "subarea/filosofia/estoicismo", domain.EdgeContains)
 
-	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/marrow", NodeType: domain.NodeTypeProject, Title: "marrow", Active: true})
-	_ = store.AddEdge(ctx, "project/marrow", "subarea/dev/backend", domain.EdgeAppliesTo)
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/silo", NodeType: domain.NodeTypeProject, Title: "silo", Active: true})
+	_ = store.AddEdge(ctx, "project/silo", "subarea/dev/backend", domain.EdgeAppliesTo)
 
 	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/kitting-inspection", NodeType: domain.NodeTypeProject, Title: "kitting-inspection", Active: true})
 	_ = store.AddEdge(ctx, "project/kitting-inspection", "subarea/dev/backend", domain.EdgeAppliesTo)
@@ -116,30 +116,30 @@ func seedDemoData(ctx context.Context, deps *Deps) error {
 
 	s1ID := "session/debug-engram-client"
 	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s1ID, NodeType: domain.NodeTypeSession, Title: "Debug de Engram MCP client", Active: true})
-	_ = store.AddEdge(ctx, s1ID, "project/marrow", domain.EdgeWorkedOn)
+	_ = store.AddEdge(ctx, s1ID, "project/silo", domain.EdgeWorkedOn)
 
 	s2ID := "session/refactor-tui"
 	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s2ID, NodeType: domain.NodeTypeSession, Title: "Refactor de TUI a arquitectura Gentle AI", Active: true})
-	_ = store.AddEdge(ctx, s2ID, "project/marrow", domain.EdgeWorkedOn)
+	_ = store.AddEdge(ctx, s2ID, "project/silo", domain.EdgeWorkedOn)
 
 	l1ID := "learning/mem-update-replaces"
 	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l1ID, NodeType: domain.NodeTypeLearning, Title: "mem_update reemplaza el contenido entero — no mergea", Active: true})
 	_ = store.AddEdge(ctx, l1ID, s1ID, domain.EdgeLearnedFrom)
 	_ = store.AddEdge(ctx, l1ID, "subarea/dev/backend", domain.EdgeAppliesTo)
-	_ = store.AddEdge(ctx, l1ID, "project/marrow", domain.EdgeAppliesTo)
+	_ = store.AddEdge(ctx, l1ID, "project/silo", domain.EdgeAppliesTo)
 
 	l2ID := "learning/engram-json-ids"
 	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l2ID, NodeType: domain.NodeTypeLearning, Title: "Engram responde JSON con id numérico, no texto con #", Active: true})
 	_ = store.AddEdge(ctx, l2ID, s1ID, domain.EdgeLearnedFrom)
 	_ = store.AddEdge(ctx, l2ID, "subarea/dev/backend", domain.EdgeAppliesTo)
-	_ = store.AddEdge(ctx, l2ID, "project/marrow", domain.EdgeAppliesTo)
+	_ = store.AddEdge(ctx, l2ID, "project/silo", domain.EdgeAppliesTo)
 
 	l3ID := "learning/screen-router-pattern"
 	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l3ID, NodeType: domain.NodeTypeLearning, Title: "Patrón Screen+Router separa rendering de lógica de navegación", Active: true})
 	_ = store.AddEdge(ctx, l3ID, s2ID, domain.EdgeLearnedFrom)
 	_ = store.AddEdge(ctx, l3ID, "subarea/dev/backend", domain.EdgeAppliesTo)
 	_ = store.AddEdge(ctx, l3ID, "subarea/dev/ios", domain.EdgeAppliesTo)
-	_ = store.AddEdge(ctx, l3ID, "project/marrow", domain.EdgeAppliesTo)
+	_ = store.AddEdge(ctx, l3ID, "project/silo", domain.EdgeAppliesTo)
 
 	return nil
 }

@@ -24,7 +24,7 @@ type ResourceStore interface {
 	Close() error
 }
 
-// ConfigLoader is the interface for loading and saving Marrow configuration.
+// ConfigLoader is the interface for loading and saving Silo configuration.
 type ConfigLoader interface {
 	Load() (Config, error)
 	Save(cfg Config) error
@@ -64,7 +64,7 @@ type GraphStore interface {
 	Close() error
 }
 
-// Config holds Marrow configuration values.
+// Config holds Silo configuration values.
 type Config struct {
 	Profile           string `yaml:"profile"`
 	EngramPath        string `yaml:"engram_path"`

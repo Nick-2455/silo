@@ -9,8 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/Nick-2455/marrow/internal/app"
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/app"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
 // Deps provides the dependencies needed by MCP handlers.

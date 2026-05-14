@@ -1,4 +1,4 @@
-module github.com/Nick-2455/marrow
+module github.com/Nick-2455/silo
 
 go 1.26.3
 

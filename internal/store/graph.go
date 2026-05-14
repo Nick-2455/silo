@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/silo/internal/domain"
 )
 
 // Verify *Store implements domain.GraphStore.

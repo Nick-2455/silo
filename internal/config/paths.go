@@ -9,7 +9,7 @@ const (
 	defaultEngramPath = "engram"
 )
 
-// ConfigDir returns the XDG-compliant configuration directory for Marrow.
+// ConfigDir returns the XDG-compliant configuration directory for Silo.
 // Uses XDG_CONFIG_HOME if set, otherwise falls back to ~/.config.
 func ConfigDir() string {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
@@ -23,7 +23,7 @@ func ConfigDir() string {
 	return filepath.Join(home, ".config", appName)
 }
 
-// DataDir returns the XDG-compliant data directory for Marrow.
+// DataDir returns the XDG-compliant data directory for Silo.
 // Uses XDG_DATA_HOME if set, otherwise falls back to ~/.local/share.
 func DataDir() string {
 	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {

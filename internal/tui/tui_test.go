@@ -6,10 +6,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Nick-2455/marrow/internal/app"
-	"github.com/Nick-2455/marrow/internal/domain"
-	"github.com/Nick-2455/marrow/internal/store"
-	"github.com/Nick-2455/marrow/internal/tui"
+	"github.com/Nick-2455/silo/internal/app"
+	"github.com/Nick-2455/silo/internal/domain"
+	"github.com/Nick-2455/silo/internal/store"
+	"github.com/Nick-2455/silo/internal/tui"
 )
 
 // mockConfigLoader is a test double for domain.ConfigLoader.
