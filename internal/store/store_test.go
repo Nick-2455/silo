@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/Nick-2455/marrow/internal/domain"
@@ -10,14 +11,26 @@ import (
 
 func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
-	s, err := store.Open(":memory:")
+	// Use temp file instead of :memory: because WAL mode doesn't work
+	// properly with in-memory SQLite databases.
+	tmpFile, err := os.CreateTemp("", "marrow-test-*.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+
+	s, err := store.Open(tmpPath)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	if err := s.Migrate(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { _ = s.Close() })
+	t.Cleanup(func() {
+		_ = s.Close()
+		_ = os.Remove(tmpPath)
+	})
 	return s
 }
 

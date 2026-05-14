@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"regexp"
+	"strings"
+	"time"
+)
 
 // Bucket represents a triage bucket for resources.
 type Bucket string
@@ -55,4 +59,95 @@ type SearchCache struct {
 // IsExpired reports whether the cache entry has passed its TTL.
 func (c *SearchCache) IsExpired() bool {
 	return time.Now().After(c.ExpiresAt)
+}
+
+// NodeType represents the kind of graph node.
+type NodeType string
+
+const (
+	NodeTypeDomain  NodeType = "domain"
+	NodeTypeSubarea NodeType = "subarea"
+	NodeTypeProject NodeType = "project"
+)
+
+// Valid reports whether nt is a recognized node type.
+func (nt NodeType) Valid() bool {
+	switch nt {
+	case NodeTypeDomain, NodeTypeSubarea, NodeTypeProject:
+		return true
+	}
+	return false
+}
+
+// EdgeLabel defines valid graph edge types.
+type EdgeLabel string
+
+const (
+	EdgeContains  EdgeLabel = "contains"   // Domain → Subarea
+	EdgeAppliesTo EdgeLabel = "applies_to" // Project → Subarea
+)
+
+// GraphNode is the SQLite-cached node topology record.
+type GraphNode struct {
+	EngramID string    `json:"engram_id"`
+	NodeType NodeType  `json:"node_type"`
+	Title    string    `json:"title"`
+	Active   bool      `json:"active"`
+	CachedAt time.Time `json:"cached_at"`
+}
+
+// GraphEdge represents a directed labeled edge.
+type GraphEdge struct {
+	FromID string     `json:"from_id"`
+	ToID   string     `json:"to_id"`
+	Label  EdgeLabel  `json:"label"`
+}
+
+// Domain represents a user-defined knowledge domain.
+type Domain struct {
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	Active      bool   `json:"active"`
+}
+
+// Subarea represents a subdivision within a Domain.
+type Subarea struct {
+	Name     string `json:"name"`
+	Slug     string `json:"slug"`
+	DomainID string `json:"domain_id"` // Engram ID of parent Domain
+	Active   bool   `json:"active"`
+}
+
+// Project represents a learning/project tracked within Subareas.
+type Project struct {
+	Name        string   `json:"name"`
+	Slug        string   `json:"slug"`
+	Description string   `json:"description"`
+	Active      bool     `json:"active"`
+	SubareaIDs  []string `json:"subarea_ids"` // Engram IDs of linked Subareas
+}
+
+// DomainWithSubareas is a read-only projection for tree rendering.
+type DomainWithSubareas struct {
+	Domain   GraphNode   `json:"domain"`
+	Subareas []GraphNode `json:"subareas"`
+}
+
+// Slugify generates a deterministic slug from a name.
+// Lowercase, spaces → hyphens, non-alphanumeric stripped.
+// "Backend Development" → "backend-development"
+func Slugify(name string) string {
+	s := strings.ToLower(strings.TrimSpace(name))
+	// Replace spaces with hyphens
+	s = strings.ReplaceAll(s, " ", "-")
+	// Remove non-alphanumeric characters except hyphens
+	re := regexp.MustCompile(`[^a-z0-9-]`)
+	s = re.ReplaceAllString(s, "")
+	// Collapse multiple hyphens
+	re2 := regexp.MustCompile(`-+`)
+	s = re2.ReplaceAllString(s, "-")
+	// Trim leading/trailing hyphens
+	s = strings.Trim(s, "-")
+	return s
 }

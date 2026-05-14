@@ -52,6 +52,16 @@ type Model struct {
 	TriageDone     bool
 	TriageErr      string
 
+	// Taxonomy screen state
+	DomainTree       []domain.DomainWithSubareas
+	DomainTreeCursor int
+
+	// Projects screen state
+	Projects        []domain.Project
+	ProjectCursor   int
+	SelectedProject *domain.Project
+	ProjectSubareas []domain.Subarea
+
 	// Dependencies
 	Deps *app.Deps
 }
@@ -74,7 +84,49 @@ func (m *Model) Init() tea.Cmd {
 		m.refreshResourcesCmd(),
 		m.healthCheckCmd(),
 		m.tickCmd(),
+		m.seedDemoDataCmd(),
 	)
+}
+
+// seedDemoDataCmd seeds demo domains, subareas, and projects if the graph is empty.
+// TODO: Remove once MCP tools handle taxonomy/project creation (PR 3).
+func (m *Model) seedDemoDataCmd() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		store := m.Deps.GraphStore
+
+		// Only seed if no domains exist
+		domains, err := store.ListNodesByType(ctx, domain.NodeTypeDomain)
+		if err != nil || len(domains) > 0 {
+			return nil
+		}
+
+		// Dev domain
+		devID := "domain/dev"
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: devID, NodeType: domain.NodeTypeDomain, Title: "Dev", Active: true})
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/dev/backend", NodeType: domain.NodeTypeSubarea, Title: "Backend", Active: true})
+		_ = store.AddEdge(ctx, devID, "subarea/dev/backend", domain.EdgeContains)
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/dev/ios", NodeType: domain.NodeTypeSubarea, Title: "iOS", Active: true})
+		_ = store.AddEdge(ctx, devID, "subarea/dev/ios", domain.EdgeContains)
+
+		// Filosofía domain
+		filoID := "domain/filosofia"
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: filoID, NodeType: domain.NodeTypeDomain, Title: "Filosofía", Active: true})
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/filosofia/estoicismo", NodeType: domain.NodeTypeSubarea, Title: "Estoicismo", Active: true})
+		_ = store.AddEdge(ctx, filoID, "subarea/filosofia/estoicismo", domain.EdgeContains)
+
+		// Projects
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/marrow", NodeType: domain.NodeTypeProject, Title: "marrow", Active: true})
+		_ = store.AddEdge(ctx, "project/marrow", "subarea/dev/backend", domain.EdgeAppliesTo)
+
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/kitting-inspection", NodeType: domain.NodeTypeProject, Title: "kitting-inspection", Active: true})
+		_ = store.AddEdge(ctx, "project/kitting-inspection", "subarea/dev/backend", domain.EdgeAppliesTo)
+
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/publora", NodeType: domain.NodeTypeProject, Title: "publora", Active: false})
+		_ = store.AddEdge(ctx, "project/publora", "subarea/dev/ios", domain.EdgeAppliesTo)
+
+		return nil
+	}
 }
 
 // Update implements tea.Model.
@@ -145,6 +197,12 @@ func (m *Model) View() string {
 		b.WriteString(screens.RenderTriage(m.TriageResource, m.BucketCursor, m.TriageMoving, m.TriageDone, m.TriageErr))
 	case ScreenConfig:
 		b.WriteString(screens.RenderConfig(m.Config, m.Cursor))
+	case ScreenDomainTree:
+		b.WriteString(screens.RenderDomainTree(m.DomainTree, m.DomainTreeCursor))
+	case ScreenProjects:
+		b.WriteString(screens.RenderProjectList(m.Projects, m.ProjectCursor))
+	case ScreenProjectDetail:
+		b.WriteString(screens.RenderProjectDetail(*m.SelectedProject, m.ProjectSubareas, m.Cursor))
 	}
 
 	b.WriteString("\n")
@@ -194,6 +252,18 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.setScreen(ScreenConfig)
 				return m, nil
 			}
+		case "g":
+			if m.Screen != ScreenDomainTree {
+				m.setScreen(ScreenDomainTree)
+				m.loadDomainTree()
+				return m, nil
+			}
+		case "p":
+			if m.Screen != ScreenProjects && m.Screen != ScreenProjectDetail {
+				m.setScreen(ScreenProjects)
+				m.loadProjects()
+				return m, nil
+			}
 		}
 	}
 
@@ -214,6 +284,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.handleTriageKey(msg)
 	case ScreenConfig:
 		return m, m.handleConfigKey(msg)
+	case ScreenDomainTree:
+		return m, m.handleDomainTreeKey(msg)
+	case ScreenProjects:
+		return m, m.handleProjectsKey(msg)
+	case ScreenProjectDetail:
+		return m, m.handleProjectDetailKey(msg)
 	}
 
 	return m, nil
@@ -248,6 +324,18 @@ func (m *Model) handleEscape() (tea.Model, tea.Cmd) {
 		return m, nil
 	case ScreenConfig:
 		m.Screen = ScreenDashboard
+		m.Cursor = 0
+		return m, nil
+	case ScreenDomainTree:
+		m.Screen = ScreenDashboard
+		m.DomainTreeCursor = 0
+		return m, nil
+	case ScreenProjects:
+		m.Screen = ScreenDashboard
+		m.ProjectCursor = 0
+		return m, nil
+	case ScreenProjectDetail:
+		m.Screen = ScreenProjects
 		m.Cursor = 0
 		return m, nil
 	default:
@@ -483,6 +571,112 @@ func (m *Model) handleConfigKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// ── Domain Tree ────────────────────────────────────────────────────────────
+
+func (m *Model) handleDomainTreeKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		if m.DomainTreeCursor > 0 {
+			m.DomainTreeCursor--
+		}
+	case "down", "j":
+		if m.DomainTreeCursor < len(m.DomainTree)-1 {
+			m.DomainTreeCursor++
+		}
+	case "enter":
+		// Read-only for now — future: expand/collapse domain
+	}
+	return nil
+}
+
+func (m *Model) loadDomainTree() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tree, err := m.Deps.GraphStore.GetDomainTree(ctx)
+	if err != nil {
+		m.StatusMsg = fmt.Sprintf("load taxonomy: %v", err)
+		return
+	}
+	m.DomainTree = tree
+	m.DomainTreeCursor = 0
+}
+
+// ── Projects ───────────────────────────────────────────────────────────────
+
+func (m *Model) handleProjectsKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		if m.ProjectCursor > 0 {
+			m.ProjectCursor--
+		}
+	case "down", "j":
+		if m.ProjectCursor < len(m.Projects)-1 {
+			m.ProjectCursor++
+		}
+	case "enter":
+		if len(m.Projects) > 0 && m.ProjectCursor < len(m.Projects) {
+			m.SelectedProject = &m.Projects[m.ProjectCursor]
+			m.setScreen(ScreenProjectDetail)
+			m.loadProjectSubareas()
+		}
+	}
+	return nil
+}
+
+func (m *Model) loadProjects() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	projects, err := m.Deps.GraphStore.ListActiveProjects(ctx)
+	if err != nil {
+		m.StatusMsg = fmt.Sprintf("load projects: %v", err)
+		return
+	}
+	m.Projects = projects
+	m.ProjectCursor = 0
+	m.SelectedProject = nil
+}
+
+func (m *Model) loadProjectSubareas() {
+	if m.SelectedProject == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	subareas := make([]domain.Subarea, 0, len(m.SelectedProject.SubareaIDs))
+	for _, id := range m.SelectedProject.SubareaIDs {
+		node, err := m.Deps.GraphStore.GetNode(ctx, id)
+		if err != nil {
+			continue
+		}
+		subareas = append(subareas, domain.Subarea{
+			Name:   node.Title,
+			Active: node.Active,
+		})
+	}
+	m.ProjectSubareas = subareas
+	m.Cursor = 0
+}
+
+// ── Project Detail ─────────────────────────────────────────────────────────
+
+func (m *Model) handleProjectDetailKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		if m.Cursor > 0 {
+			m.Cursor--
+		}
+	case "down", "j":
+		if m.Cursor < len(m.ProjectSubareas)-1 {
+			m.Cursor++
+		}
+	}
+	return nil
+}
+
 // ── Commands ───────────────────────────────────────────────────────────────
 
 func (m *Model) refreshResourcesCmd() tea.Cmd {
@@ -555,6 +749,12 @@ func (m *Model) footer() string {
 	case ScreenTriage:
 		keys = "↑/↓:select bucket  enter:move  esc:back  q:quit"
 	case ScreenConfig:
+		keys = "↑/↓:navigate  esc:back  q:quit"
+	case ScreenDomainTree:
+		keys = "↑/↓:navigate  esc:back  q:quit"
+	case ScreenProjects:
+		keys = "↑/↓:navigate  enter:details  esc:back  q:quit"
+	case ScreenProjectDetail:
 		keys = "↑/↓:navigate  esc:back  q:quit"
 	default:
 		keys = "q:quit"

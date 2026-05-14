@@ -80,6 +80,14 @@ func (m *mockEngramClient) IsReachable(ctx context.Context) bool {
 	return m.reachable
 }
 
+func (m *mockEngramClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey string) (string, error) {
+	return "test-node-id-123", nil
+}
+
+func (m *mockEngramClient) UpdateNode(ctx context.Context, engramID string, content map[string]any) error {
+	return nil
+}
+
 func newTestDeps(t *testing.T) *app.Deps {
 	t.Helper()
 
@@ -109,10 +117,11 @@ func newTestDeps(t *testing.T) *app.Deps {
 	}
 
 	return &app.Deps{
-		Config: loader.cfg,
-		Store:  dbStore,
-		Engram: engram,
-		Loader: loader,
+		Config:     loader.cfg,
+		Store:      dbStore,
+		Engram:     engram,
+		Loader:     loader,
+		GraphStore: dbStore, // *Store implements domain.GraphStore
 	}
 }
 

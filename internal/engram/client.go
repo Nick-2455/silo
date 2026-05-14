@@ -120,6 +120,68 @@ func (c *MCPClient) SearchResources(ctx context.Context, query string) ([]domain
 	return parseSearchResults(extractText(result))
 }
 
+// SaveNode creates or updates a node in Engram with type and topic_key.
+// Returns the Engram observation ID.
+func (c *MCPClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey string) (string, error) {
+	contentBytes, err := json.Marshal(content)
+	if err != nil {
+		return "", fmt.Errorf("engram: marshal node content: %w", err)
+	}
+
+	result, err := c.callTool(ctx, "mem_save", map[string]any{
+		"title":     title,
+		"content":   string(contentBytes),
+		"type":      nodeType,
+		"topic_key": topicKey,
+		"project":   "marrow",
+	})
+	if err != nil {
+		return "", err
+	}
+
+	text := extractText(result)
+	return parseObservationID(text), nil
+}
+
+// UpdateNode updates a node's content by Engram observation ID.
+func (c *MCPClient) UpdateNode(ctx context.Context, engramID string, content map[string]any) error {
+	contentBytes, err := json.Marshal(content)
+	if err != nil {
+		return fmt.Errorf("engram: marshal update content: %w", err)
+	}
+
+	numID, err := parseIDToNumber(engramID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.callTool(ctx, "mem_update", map[string]any{
+		"id":      numID,
+		"content": string(contentBytes),
+	})
+	return err
+}
+
+// SearchNodes searches for nodes by query and optional type filter.
+// Returns parsed observation IDs and titles from Engram search results.
+func (c *MCPClient) SearchNodes(ctx context.Context, query, nodeType string) ([]domain.GraphNode, error) {
+	args := map[string]any{
+		"query":   query,
+		"project": "marrow",
+		"limit":   50,
+	}
+	if nodeType != "" {
+		args["type"] = nodeType
+	}
+
+	result, err := c.callTool(ctx, "mem_search", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseGraphNodeResults(extractText(result))
+}
+
 // UpdateResource updates fields of an existing resource via mem_update.
 func (c *MCPClient) UpdateResource(ctx context.Context, id string, updates map[string]any) error {
 	// Build a content JSON string from the updates
@@ -394,4 +456,74 @@ func parseIDToNumber(id string) (float64, error) {
 		return 0, fmt.Errorf("engram: invalid observation ID %q: %w", id, err)
 	}
 	return n, nil
+}
+
+// parseGraphNodeResults parses mem_search text results into []domain.GraphNode.
+// The response text follows the same format as resource search results.
+func parseGraphNodeResults(text string) ([]domain.GraphNode, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return []domain.GraphNode{}, nil
+	}
+
+	// Parse outer JSON wrapper
+	var wrapper struct {
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(text), &wrapper); err != nil {
+		return nil, fmt.Errorf("engram: parse graph search wrapper: %w", err)
+	}
+
+	if wrapper.Result == "" {
+		return []domain.GraphNode{}, nil
+	}
+
+	// Parse memory blocks — each block has header line with #ID (type) — title
+	var nodes []domain.GraphNode
+	blocks := strings.Split(wrapper.Result, "\n\n")
+	for _, block := range blocks {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			continue
+		}
+
+		lines := strings.Split(block, "\n")
+		if len(lines) == 0 {
+			continue
+		}
+
+		// Parse header: "[1] #131 (domain) — Backend Development"
+		header := lines[0]
+		var node domain.GraphNode
+
+		// Extract ID
+		if idx := strings.Index(header, "#"); idx >= 0 {
+			rest := header[idx+1:]
+			if space := strings.IndexAny(rest, " \t("); space > 0 {
+				node.EngramID = rest[:space]
+			}
+		}
+
+		// Extract type
+		if start := strings.Index(header, "("); start >= 0 {
+			end := strings.Index(header[start:], ")")
+			if end > 0 {
+				nodeType := header[start+1 : start+end]
+				node.NodeType = domain.NodeType(nodeType)
+			}
+		}
+
+		// Extract title after "—"
+		if idx := strings.Index(header, "—"); idx >= 0 {
+			node.Title = strings.TrimSpace(header[idx+len("—"):])
+		}
+
+		node.Active = true // Default to active for search results
+
+		if node.EngramID != "" || node.Title != "" {
+			nodes = append(nodes, node)
+		}
+	}
+
+	return nodes, nil
 }

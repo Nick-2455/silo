@@ -18,6 +18,14 @@ var (
 	ErrCacheMiss      = errors.New("store: cache miss")
 )
 
+// Sentinel errors for graph store operations.
+var (
+	ErrNodeNotFound   = errors.New("graph: node not found")
+	ErrDuplicateNode  = errors.New("graph: node with same name already exists")
+	ErrDomainNotEmpty = errors.New("graph: cannot delete domain with active subareas")
+	ErrEngramUnavail  = errors.New("graph: engram unavailable, writes rejected")
+)
+
 // Sentinel errors for config operations.
 var (
 	ErrConfigNotFound = errors.New("config: configuration file not found")

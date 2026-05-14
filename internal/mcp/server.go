@@ -18,14 +18,25 @@ func NewServer() *server.MCPServer {
 		server.WithToolCapabilities(false),
 	)
 
-	// Register tools
+	// Resource tools
 	s.AddTool(searchTool(), handleSearch)
 	s.AddTool(addResourceTool(), handleAddResource)
 	s.AddTool(getRoadmapTool(), handleGetRoadmap)
 	s.AddTool(triageTool(), handleTriage)
 
+	// Graph tools
+	s.AddTool(listDomainsTool(), handleListDomains)
+	s.AddTool(listProjectsTool(), handleListProjects)
+	s.AddTool(createDomainTool(), handleCreateDomain)
+	s.AddTool(createSubareaTool(), handleCreateSubarea)
+	s.AddTool(createProjectTool(), handleCreateProject)
+	s.AddTool(linkProjectTool(), handleLinkProject)
+	s.AddTool(toggleProjectTool(), handleToggleProject)
+
 	return s
 }
+
+// --- Resource tools ---
 
 func searchTool() mcp.Tool {
 	return mcp.NewTool("search",
@@ -70,6 +81,84 @@ func triageTool() mcp.Tool {
 			mcp.Required(),
 			mcp.Description("Target bucket: inbox, active, later, or archived"),
 			mcp.Enum("inbox", "active", "later", "archived"),
+		),
+	)
+}
+
+// --- Graph tools ---
+
+func listDomainsTool() mcp.Tool {
+	return mcp.NewTool("list_domains",
+		mcp.WithDescription("List all domains with their nested subareas. Returns a hierarchical view of the knowledge taxonomy."),
+	)
+}
+
+func listProjectsTool() mcp.Tool {
+	return mcp.NewTool("list_projects",
+		mcp.WithDescription("List all projects (active and inactive) with their linked subareas."),
+	)
+}
+
+func createDomainTool() mcp.Tool {
+	return mcp.NewTool("create_domain",
+		mcp.WithDescription("Create a new knowledge domain. Stores in Engram and caches in SQLite."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the domain"),
+		),
+		mcp.WithString("description",
+			mcp.Description("Optional description of the domain"),
+		),
+	)
+}
+
+func createSubareaTool() mcp.Tool {
+	return mcp.NewTool("create_subarea",
+		mcp.WithDescription("Create a subarea under an existing domain. Adds a 'contains' edge from domain to subarea."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the subarea"),
+		),
+		mcp.WithString("domain_slug",
+			mcp.Required(),
+			mcp.Description("Slug of the parent domain"),
+		),
+	)
+}
+
+func createProjectTool() mcp.Tool {
+	return mcp.NewTool("create_project",
+		mcp.WithDescription("Create a new project. Stores in Engram and caches in SQLite. Use link_project to connect to subareas."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the project"),
+		),
+		mcp.WithString("description",
+			mcp.Description("Optional description of the project"),
+		),
+	)
+}
+
+func linkProjectTool() mcp.Tool {
+	return mcp.NewTool("link_project",
+		mcp.WithDescription("Link a project to a subarea. Creates an 'applies_to' edge from project to subarea."),
+		mcp.WithString("project_slug",
+			mcp.Required(),
+			mcp.Description("Slug of the project"),
+		),
+		mcp.WithString("subarea_slug",
+			mcp.Required(),
+			mcp.Description("Slug of the subarea"),
+		),
+	)
+}
+
+func toggleProjectTool() mcp.Tool {
+	return mcp.NewTool("toggle_project",
+		mcp.WithDescription("Toggle a project between active and inactive states. Updates both Engram and SQLite."),
+		mcp.WithString("project_slug",
+			mcp.Required(),
+			mcp.Description("Slug of the project to toggle"),
 		),
 	)
 }

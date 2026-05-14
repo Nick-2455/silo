@@ -9,14 +9,20 @@ const (
 	ScreenAdd
 	ScreenTriage
 	ScreenConfig
+	ScreenDomainTree
+	ScreenProjects
+	ScreenProjectDetail
 )
 
 var screenNames = map[Screen]string{
-	ScreenDashboard: "Dashboard",
-	ScreenList:      "List",
-	ScreenAdd:       "Add",
-	ScreenTriage:    "Triage",
-	ScreenConfig:    "Config",
+	ScreenDashboard:     "Dashboard",
+	ScreenList:          "List",
+	ScreenAdd:           "Add",
+	ScreenTriage:        "Triage",
+	ScreenConfig:        "Config",
+	ScreenDomainTree:    "Taxonomy",
+	ScreenProjects:      "Projects",
+	ScreenProjectDetail: "Project Detail",
 }
 
 func (s Screen) String() string {
@@ -31,11 +37,14 @@ type Route struct {
 
 // routes maps each screen to its valid navigation targets.
 var routes = map[Screen]Route{
-	ScreenDashboard: {},
-	ScreenList:      {Backward: ScreenDashboard},
-	ScreenAdd:       {Backward: ScreenDashboard},
-	ScreenTriage:    {Backward: ScreenDashboard},
-	ScreenConfig:    {Backward: ScreenDashboard},
+	ScreenDashboard:     {},
+	ScreenList:          {Backward: ScreenDashboard},
+	ScreenAdd:           {Backward: ScreenDashboard},
+	ScreenTriage:        {Backward: ScreenDashboard},
+	ScreenConfig:        {Backward: ScreenDashboard},
+	ScreenDomainTree:    {Backward: ScreenDashboard},
+	ScreenProjects:      {Backward: ScreenDashboard},
+	ScreenProjectDetail: {Backward: ScreenProjects},
 }
 
 // setScreen navigates to the given screen, recording the current screen as previous.

@@ -15,15 +15,17 @@ import (
 
 // Deps provides the dependencies needed by MCP handlers.
 type Deps struct {
-	Engram domain.EngramClient
-	Store  domain.ResourceStore
+	Engram     domain.EngramClient
+	Store      domain.ResourceStore
+	GraphStore domain.GraphStore
 }
 
 // NewDeps creates handler dependencies from app.Deps.
 func NewDeps(d *app.Deps) *Deps {
 	return &Deps{
-		Engram: d.Engram,
-		Store:  d.Store,
+		Engram:     d.Engram,
+		Store:      d.Store,
+		GraphStore: d.GraphStore,
 	}
 }
 

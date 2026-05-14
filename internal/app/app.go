@@ -11,10 +11,11 @@ import (
 
 // Deps holds all initialized dependencies for the application.
 type Deps struct {
-	Config  domain.Config
-	Store   *store.Store
-	Engram  domain.EngramClient
-	Loader  domain.ConfigLoader
+	Config     domain.Config
+	Store      *store.Store
+	Engram     domain.EngramClient
+	Loader     domain.ConfigLoader
+	GraphStore domain.GraphStore
 }
 
 // Bootstrap initializes all application dependencies.
@@ -58,9 +59,10 @@ func Bootstrap() (*Deps, error) {
 	}
 
 	return &Deps{
-		Config: cfg,
-		Store:  s,
-		Engram: engramClient,
-		Loader: loader,
+		Config:     cfg,
+		Store:      s,
+		Engram:     engramClient,
+		Loader:     loader,
+		GraphStore: s, // *Store implements domain.GraphStore
 	}, nil
 }

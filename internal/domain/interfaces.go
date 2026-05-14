@@ -9,6 +9,8 @@ type EngramClient interface {
 	SearchResources(ctx context.Context, query string) ([]Resource, error)
 	UpdateResource(ctx context.Context, id string, updates map[string]any) error
 	IsReachable(ctx context.Context) bool
+	SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey string) (string, error)
+	UpdateNode(ctx context.Context, engramID string, content map[string]any) error
 }
 
 // ResourceStore is the interface for local SQLite persistence.
@@ -27,6 +29,28 @@ type ConfigLoader interface {
 	Load() (Config, error)
 	Save(cfg Config) error
 	Path() string
+}
+
+// GraphStore manages graph nodes and edges in SQLite.
+type GraphStore interface {
+	// Node operations
+	UpsertNode(ctx context.Context, node GraphNode) error
+	DeleteNode(ctx context.Context, engramID string) error // soft delete
+	GetNode(ctx context.Context, engramID string) (GraphNode, error)
+	ListNodesByType(ctx context.Context, nodeType NodeType) ([]GraphNode, error)
+
+	// Edge operations
+	AddEdge(ctx context.Context, fromID, toID string, label EdgeLabel) error
+	RemoveEdge(ctx context.Context, fromID, toID string, label EdgeLabel) error
+	GetEdges(ctx context.Context, nodeID string, direction string) ([]GraphEdge, error) // direction: "from", "to", "both"
+	GetNeighbors(ctx context.Context, nodeID string, label EdgeLabel) ([]GraphNode, error)
+
+	// Domain-specific queries
+	GetDomainTree(ctx context.Context) ([]DomainWithSubareas, error)
+	ListActiveProjects(ctx context.Context) ([]Project, error)
+
+	// Close shares the Store's db; no-op
+	Close() error
 }
 
 // Config holds Marrow configuration values.
