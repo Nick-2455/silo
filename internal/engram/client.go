@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,7 @@ func NewClient(engramPath string) (*MCPClient, error) {
 }
 
 // CreateResource creates a new resource in Engram via mem_save.
+// Each resource is a unique observation — no topic_key is used to avoid upserts.
 func (c *MCPClient) CreateResource(ctx context.Context, r domain.Resource) (string, error) {
 	contentMap := map[string]string{
 		"url":    r.URL,
@@ -72,17 +74,11 @@ func (c *MCPClient) CreateResource(ctx context.Context, r domain.Resource) (stri
 		return "", fmt.Errorf("engram: marshal content: %w", err)
 	}
 
-	topicKey := "marrow/resource/" + r.ID
-	if r.ID == "" {
-		topicKey = "marrow/resource/new"
-	}
-
 	result, err := c.callTool(ctx, "mem_save", map[string]any{
-		"title":     r.Title,
-		"content":   string(contentBytes),
-		"type":      "resource",
-		"project":   "marrow",
-		"topic_key": topicKey,
+		"title":   r.Title,
+		"content": string(contentBytes),
+		"type":    "resource",
+		"project": "marrow",
 	})
 	if err != nil {
 		return "", err
@@ -95,8 +91,12 @@ func (c *MCPClient) CreateResource(ctx context.Context, r domain.Resource) (stri
 
 // GetResource retrieves a resource by ID via mem_get_observation.
 func (c *MCPClient) GetResource(ctx context.Context, id string) (domain.Resource, error) {
+	numID, err := parseIDToNumber(id)
+	if err != nil {
+		return domain.Resource{}, err
+	}
 	result, err := c.callTool(ctx, "mem_get_observation", map[string]any{
-		"id": id,
+		"id": numID,
 	})
 	if err != nil {
 		return domain.Resource{}, err
@@ -128,8 +128,13 @@ func (c *MCPClient) UpdateResource(ctx context.Context, id string, updates map[s
 		return fmt.Errorf("engram: marshal updates: %w", err)
 	}
 
+	numID, err := parseIDToNumber(id)
+	if err != nil {
+		return err
+	}
+
 	_, err = c.callTool(ctx, "mem_update", map[string]any{
-		"id":      id,
+		"id":      numID,
 		"content": string(contentBytes),
 	})
 	return err
@@ -211,10 +216,27 @@ func extractText(result *mcp.CallToolResult) string {
 	return ""
 }
 
-// parseObservationID tries to extract an observation ID from mem_save response text.
-// Engram mem_save returns text like "#131" or "Memory saved: #131".
+// parseObservationID extracts an observation ID from mem_save response text.
+// Engram mem_save returns a JSON object with an "id" field:
+//
+//	{"id":131,"project":"marrow","result":"Memory saved: ..."}
+//
+// Falls back to extracting #<number> from plain text for older Engram versions.
 func parseObservationID(text string) string {
-	// Find "#<number>" pattern
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return text
+	}
+
+	// Primary path: parse JSON response and extract "id" field.
+	var wrapper struct {
+		ID json.Number `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(text), &wrapper); err == nil && wrapper.ID.String() != "" {
+		return wrapper.ID.String()
+	}
+
+	// Fallback: find "#<number>" pattern (older Engram versions).
 	if idx := strings.Index(text, "#"); idx >= 0 {
 		rest := text[idx+1:]
 		// Take digits and stop at first non-digit
@@ -362,4 +384,14 @@ func parseContentLine(line string, r *domain.Resource) {
 	if bucket, ok := content["bucket"]; ok {
 		r.Bucket = domain.Bucket(bucket)
 	}
+}
+
+// parseIDToNumber converts a string observation ID (e.g. "131") to a float64
+// for use with Engram MCP tools that expect numeric IDs (mem_get_observation, mem_update).
+func parseIDToNumber(id string) (float64, error) {
+	n, err := strconv.ParseFloat(id, 64)
+	if err != nil {
+		return 0, fmt.Errorf("engram: invalid observation ID %q: %w", id, err)
+	}
+	return n, nil
 }
