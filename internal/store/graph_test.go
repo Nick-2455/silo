@@ -483,6 +483,15 @@ func TestNodeType_Valid(t *testing.T) {
 	if !domain.NodeTypeProject.Valid() {
 		t.Error("NodeTypeProject should be valid")
 	}
+	if !domain.NodeTypeSession.Valid() {
+		t.Error("NodeTypeSession should be valid")
+	}
+	if !domain.NodeTypeLearning.Valid() {
+		t.Error("NodeTypeLearning should be valid")
+	}
+	if !domain.NodeTypePerson.Valid() {
+		t.Error("NodeTypePerson should be valid")
+	}
 	if domain.NodeType("invalid").Valid() {
 		t.Error("invalid type should not be valid")
 	}

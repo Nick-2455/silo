@@ -191,6 +191,26 @@ func (m *mockGraphStore) ListActiveProjects(ctx context.Context) ([]domain.Proje
 	return nil, nil
 }
 
+func (m *mockGraphStore) ListSessions(ctx context.Context, projectID string) ([]domain.Session, error) {
+	return nil, nil
+}
+
+func (m *mockGraphStore) GetSession(ctx context.Context, id string) (domain.Session, error) {
+	return domain.Session{}, domain.ErrSessionNotFound
+}
+
+func (m *mockGraphStore) ListLearnings(ctx context.Context, subareaID string) ([]domain.Learning, error) {
+	return nil, nil
+}
+
+func (m *mockGraphStore) GetLearning(ctx context.Context, id string) (domain.Learning, error) {
+	return domain.Learning{}, domain.ErrLearningNotFound
+}
+
+func (m *mockGraphStore) UpsertPerson(ctx context.Context, node domain.GraphNode) error {
+	return nil
+}
+
 func (m *mockGraphStore) Close() error {
 	return nil
 }

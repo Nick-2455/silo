@@ -33,6 +33,14 @@ func NewServer() *server.MCPServer {
 	s.AddTool(linkProjectTool(), handleLinkProject)
 	s.AddTool(toggleProjectTool(), handleToggleProject)
 
+	// Session and Learning tools
+	s.AddTool(createSessionTool(), handleCreateSession)
+	s.AddTool(createLearningTool(), handleCreateLearning)
+	s.AddTool(listSessionsTool(), handleListSessions)
+	s.AddTool(listLearningsTool(), handleListLearnings)
+	s.AddTool(linkResourceTool(), handleLinkResource)
+	s.AddTool(listPersonTool(), handleListPerson)
+
 	return s
 }
 
@@ -160,5 +168,82 @@ func toggleProjectTool() mcp.Tool {
 			mcp.Required(),
 			mcp.Description("Slug of the project to toggle"),
 		),
+	)
+}
+
+// --- Session and Learning tools ---
+
+func createSessionTool() mcp.Tool {
+	return mcp.NewTool("create_session",
+		mcp.WithDescription("Create a new session linked to a project. Creates a session node and a 'worked_on' edge from project to session."),
+		mcp.WithString("project_slug",
+			mcp.Required(),
+			mcp.Description("Slug of the project this session belongs to"),
+		),
+		mcp.WithString("description",
+			mcp.Required(),
+			mcp.Description("Description of the session"),
+		),
+	)
+}
+
+func createLearningTool() mcp.Tool {
+	return mcp.NewTool("create_learning",
+		mcp.WithDescription("Create a new learning artifact linked to a session. Creates a learning node with 'learned_from' edge to session and 'references' edges to subareas/projects."),
+		mcp.WithString("session_slug",
+			mcp.Required(),
+			mcp.Description("Slug of the session this learning came from"),
+		),
+		mcp.WithString("content",
+			mcp.Required(),
+			mcp.Description("Content of the learning"),
+		),
+		mcp.WithArray("subarea_slugs",
+			mcp.Description("List of subarea slugs to tag this learning with"),
+		),
+		mcp.WithArray("project_slugs",
+			mcp.Description("List of project slugs to tag this learning with"),
+		),
+	)
+}
+
+func listSessionsTool() mcp.Tool {
+	return mcp.NewTool("list_sessions",
+		mcp.WithDescription("List sessions, optionally filtered by project slug."),
+		mcp.WithString("project_slug",
+			mcp.Description("Filter sessions by project slug"),
+		),
+	)
+}
+
+func listLearningsTool() mcp.Tool {
+	return mcp.NewTool("list_learnings",
+		mcp.WithDescription("List learnings, optionally filtered by subarea or project slug."),
+		mcp.WithString("subarea_slug",
+			mcp.Description("Filter learnings by subarea slug"),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Filter learnings by project slug"),
+		),
+	)
+}
+
+func linkResourceTool() mcp.Tool {
+	return mcp.NewTool("link_resource",
+		mcp.WithDescription("Add a 'references' edge between an existing resource/node and a subarea. Use to tag resources with subareas."),
+		mcp.WithString("resource_id",
+			mcp.Required(),
+			mcp.Description("Engram ID of the resource to tag"),
+		),
+		mcp.WithString("subarea_slug",
+			mcp.Required(),
+			mcp.Description("Slug of the subarea to link to"),
+		),
+	)
+}
+
+func listPersonTool() mcp.Tool {
+	return mcp.NewTool("list_person",
+		mcp.WithDescription("Get the user's person node from the knowledge graph."),
 	)
 }

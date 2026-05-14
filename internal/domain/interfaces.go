@@ -49,6 +49,17 @@ type GraphStore interface {
 	GetDomainTree(ctx context.Context) ([]DomainWithSubareas, error)
 	ListActiveProjects(ctx context.Context) ([]Project, error)
 
+	// Session operations
+	ListSessions(ctx context.Context, projectID string) ([]Session, error)
+	GetSession(ctx context.Context, id string) (Session, error)
+
+	// Learning operations
+	ListLearnings(ctx context.Context, subareaID string) ([]Learning, error)
+	GetLearning(ctx context.Context, id string) (Learning, error)
+
+	// Person operations
+	UpsertPerson(ctx context.Context, node GraphNode) error
+
 	// Close shares the Store's db; no-op
 	Close() error
 }

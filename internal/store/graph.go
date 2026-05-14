@@ -266,6 +266,207 @@ func (s *Store) ListActiveProjects(_ context.Context) ([]domain.Project, error) 
 	return projects, nil
 }
 
+// UpsertPerson inserts or replaces a person node. Used for auto-creating the default user.
+func (s *Store) UpsertPerson(_ context.Context, node domain.GraphNode) error {
+	return s.UpsertNode(context.Background(), node)
+}
+
+// ListSessions returns sessions for a given project.
+func (s *Store) ListSessions(_ context.Context, projectID string) ([]domain.Session, error) {
+	// Edge direction: Session --worked_on--> Project
+	// Find sessions where the edge points TO this project.
+	rows, err := s.db.Query(
+		`SELECT gn.engram_id, gn.title, gn.cached_at
+		 FROM graph_nodes gn
+		 JOIN graph_edges ge ON gn.engram_id = ge.from_id
+		 WHERE ge.to_id = ? AND ge.label = ? AND gn.node_type = ? AND gn.active = 1
+		 ORDER BY gn.cached_at DESC`,
+		projectID, domain.EdgeWorkedOn, domain.NodeTypeSession,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store: list sessions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var sessions []domain.Session
+	for rows.Next() {
+		var id, title, cachedAt string
+		if err := rows.Scan(&id, &title, &cachedAt); err != nil {
+			return nil, fmt.Errorf("store: scan session: %w", err)
+		}
+		sessions = append(sessions, domain.Session{
+			ID:          id,
+			ProjectID:   projectID,
+			Description: title,
+			CreatedAt:   parseTime(cachedAt),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: sessions iteration: %w", err)
+	}
+	return sessions, nil
+}
+
+// GetSession retrieves a session by ID.
+func (s *Store) GetSession(_ context.Context, id string) (domain.Session, error) {
+	var session domain.Session
+	var title, cachedAt string
+
+	err := s.db.QueryRow(
+		`SELECT engram_id, title, cached_at FROM graph_nodes WHERE engram_id = ? AND node_type = ?`,
+		id, domain.NodeTypeSession,
+	).Scan(&session.ID, &title, &cachedAt)
+
+	if err == sql.ErrNoRows {
+		return session, domain.ErrSessionNotFound
+	}
+	if err != nil {
+		return session, fmt.Errorf("store: get session: %w", err)
+	}
+
+	session.Description = title
+	session.CreatedAt = parseTime(cachedAt)
+
+	// Find project via worked_on edge (session is the "to" side)
+	var projectID sql.NullString
+	_ = s.db.QueryRow(
+		`SELECT from_id FROM graph_edges WHERE to_id = ? AND label = ?`,
+		id, domain.EdgeWorkedOn,
+	).Scan(&projectID)
+	if projectID.Valid {
+		session.ProjectID = projectID.String
+	}
+
+	return session, nil
+}
+
+// ListLearnings returns learnings, optionally filtered by subarea.
+func (s *Store) ListLearnings(_ context.Context, subareaID string) ([]domain.Learning, error) {
+	var rows *sql.Rows
+	var err error
+
+	if subareaID != "" {
+		// Edge direction: Learning --applies_to--> Subarea
+		// Find learnings where the edge points TO this subarea.
+		rows, err = s.db.Query(
+			`SELECT DISTINCT gn.engram_id, gn.title, gn.cached_at
+			 FROM graph_nodes gn
+			 JOIN graph_edges ge ON gn.engram_id = ge.from_id
+			 WHERE ge.to_id = ? AND ge.label = ? AND gn.node_type = ? AND gn.active = 1
+			 ORDER BY gn.cached_at DESC`,
+			subareaID, domain.EdgeAppliesTo, domain.NodeTypeLearning,
+		)
+	} else {
+		rows, err = s.db.Query(
+			`SELECT engram_id, title, cached_at FROM graph_nodes
+			 WHERE node_type = ? AND active = 1 ORDER BY cached_at DESC`,
+			domain.NodeTypeLearning,
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("store: list learnings: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var learnings []domain.Learning
+	for rows.Next() {
+		var id, content, cachedAt string
+		if err := rows.Scan(&id, &content, &cachedAt); err != nil {
+			return nil, fmt.Errorf("store: scan learning: %w", err)
+		}
+		l := domain.Learning{
+			ID:        id,
+			Content:   content,
+			CreatedAt: parseTime(cachedAt),
+		}
+
+		// Fetch linked subareas via references edges (learning → subarea)
+		subRows, serr := s.db.Query(
+			`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
+			id, domain.EdgeReferences,
+		)
+		if serr == nil {
+			for subRows.Next() {
+				var sid string
+				if err := subRows.Scan(&sid); err == nil {
+					l.SubareaIDs = append(l.SubareaIDs, sid)
+				}
+			}
+			_ = subRows.Close()
+		}
+
+		// Fetch linked sessions via learned_from edges (learning → session)
+		sessRows, serr := s.db.Query(
+			`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
+			id, domain.EdgeLearnedFrom,
+		)
+		if serr == nil {
+			for sessRows.Next() {
+				var sid string
+				if err := sessRows.Scan(&sid); err == nil {
+					l.SessionID = sid
+					break // one session per learning
+				}
+			}
+			_ = sessRows.Close()
+		}
+
+		learnings = append(learnings, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: learnings iteration: %w", err)
+	}
+	return learnings, nil
+}
+
+// GetLearning retrieves a learning by ID.
+func (s *Store) GetLearning(_ context.Context, id string) (domain.Learning, error) {
+	var learning domain.Learning
+	var content, cachedAt string
+
+	err := s.db.QueryRow(
+		`SELECT engram_id, title, cached_at FROM graph_nodes WHERE engram_id = ? AND node_type = ?`,
+		id, domain.NodeTypeLearning,
+	).Scan(&learning.ID, &content, &cachedAt)
+
+	if err == sql.ErrNoRows {
+		return learning, domain.ErrLearningNotFound
+	}
+	if err != nil {
+		return learning, fmt.Errorf("store: get learning: %w", err)
+	}
+
+	learning.Content = content
+	learning.CreatedAt = parseTime(cachedAt)
+
+	// Fetch linked subareas
+	subRows, err := s.db.Query(
+		`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
+		id, domain.EdgeReferences,
+	)
+	if err == nil {
+		for subRows.Next() {
+			var sid string
+			if err := subRows.Scan(&sid); err == nil {
+				learning.SubareaIDs = append(learning.SubareaIDs, sid)
+			}
+		}
+		_ = subRows.Close()
+	}
+
+	// Fetch linked session
+	var sessionID sql.NullString
+	_ = s.db.QueryRow(
+		`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
+		id, domain.EdgeLearnedFrom,
+	).Scan(&sessionID)
+	if sessionID.Valid {
+		learning.SessionID = sessionID.String
+	}
+
+	return learning, nil
+}
+
 // scanGraphNodes scans rows into a slice of GraphNode.
 func scanGraphNodes(rows *sql.Rows) ([]domain.GraphNode, error) {
 	if rows == nil {

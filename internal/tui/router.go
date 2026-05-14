@@ -12,17 +12,23 @@ const (
 	ScreenDomainTree
 	ScreenProjects
 	ScreenProjectDetail
+	ScreenSessions
+	ScreenSessionDetail
+	ScreenLearnings
 )
 
 var screenNames = map[Screen]string{
-	ScreenDashboard:     "Dashboard",
-	ScreenList:          "List",
-	ScreenAdd:           "Add",
-	ScreenTriage:        "Triage",
-	ScreenConfig:        "Config",
-	ScreenDomainTree:    "Taxonomy",
-	ScreenProjects:      "Projects",
-	ScreenProjectDetail: "Project Detail",
+	ScreenDashboard:      "Dashboard",
+	ScreenList:           "List",
+	ScreenAdd:            "Add",
+	ScreenTriage:         "Triage",
+	ScreenConfig:         "Config",
+	ScreenDomainTree:     "Taxonomy",
+	ScreenProjects:       "Projects",
+	ScreenProjectDetail:  "Project Detail",
+	ScreenSessions:       "Sessions",
+	ScreenSessionDetail:  "Session Detail",
+	ScreenLearnings:      "Learnings",
 }
 
 func (s Screen) String() string {
@@ -37,14 +43,17 @@ type Route struct {
 
 // routes maps each screen to its valid navigation targets.
 var routes = map[Screen]Route{
-	ScreenDashboard:     {},
-	ScreenList:          {Backward: ScreenDashboard},
-	ScreenAdd:           {Backward: ScreenDashboard},
-	ScreenTriage:        {Backward: ScreenDashboard},
-	ScreenConfig:        {Backward: ScreenDashboard},
-	ScreenDomainTree:    {Backward: ScreenDashboard},
-	ScreenProjects:      {Backward: ScreenDashboard},
-	ScreenProjectDetail: {Backward: ScreenProjects},
+	ScreenDashboard:      {},
+	ScreenList:           {Backward: ScreenDashboard},
+	ScreenAdd:            {Backward: ScreenDashboard},
+	ScreenTriage:         {Backward: ScreenDashboard},
+	ScreenConfig:         {Backward: ScreenDashboard},
+	ScreenDomainTree:     {Backward: ScreenDashboard},
+	ScreenProjects:       {Backward: ScreenDashboard},
+	ScreenProjectDetail:  {Backward: ScreenProjects},
+	ScreenSessions:       {Backward: ScreenDashboard},
+	ScreenSessionDetail:  {Backward: ScreenSessions},
+	ScreenLearnings:      {Backward: ScreenDashboard},
 }
 
 // setScreen navigates to the given screen, recording the current screen as previous.

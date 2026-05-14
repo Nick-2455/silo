@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -373,4 +374,422 @@ func handleToggleProject(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 	}
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
+}
+
+// handleCreateSession creates a session linked to a project.
+func handleCreateSession(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	projectSlug, err := req.RequireString("project_slug")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	description, err := req.RequireString("description")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Find project node
+	projects, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to load projects: %v", err)), nil
+	}
+
+	var projectID string
+	for _, p := range projects {
+		if domain.Slugify(p.Title) == projectSlug {
+			projectID = p.EngramID
+			break
+		}
+	}
+	if projectID == "" {
+		return mcp.NewToolResultError(fmt.Sprintf("project not found: %q", projectSlug)), nil
+	}
+
+	slug := domain.Slugify(description)
+	if slug == "" {
+		slug = "session"
+	}
+	sessionID := "session/" + slug
+
+	// Create in Engram first
+	engramID, err := handlerDeps.Engram.SaveNode(ctx, string(domain.NodeTypeSession), description, map[string]any{
+		"description": description,
+		"project_id":  projectID,
+		"active":      true,
+	}, "session/"+slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create session in Engram: %v", err)), nil
+	}
+
+	// Cache in SQLite
+	if err := handlerDeps.GraphStore.UpsertNode(ctx, domain.GraphNode{
+		EngramID: engramID,
+		NodeType: domain.NodeTypeSession,
+		Title:    description,
+		Active:   true,
+	}); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("created in Engram (id=%s) but failed to cache in SQLite: %v", engramID, err)), nil
+	}
+
+	// Add worked_on edge: Project → Session
+	if err := handlerDeps.GraphStore.AddEdge(ctx, projectID, engramID, domain.EdgeWorkedOn); err != nil {
+		if err == domain.ErrDuplicateNode {
+			return mcp.NewToolResultError(fmt.Sprintf("session already linked to project %q", projectSlug)), nil
+		}
+		return mcp.NewToolResultError(fmt.Sprintf("created session but failed to link to project: %v", err)), nil
+	}
+
+	result := map[string]any{
+		"engram_id":    engramID,
+		"id":           sessionID,
+		"description":  description,
+		"project_slug": projectSlug,
+	}
+	data, _ := json.Marshal(result)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// handleCreateLearning creates a learning linked to a session and subareas.
+func handleCreateLearning(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sessionSlug, err := req.RequireString("session_slug")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	content, err := req.RequireString("content")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Find session node
+	sessions, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeSession)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to load sessions: %v", err)), nil
+	}
+
+	var sessionID string
+	for _, s := range sessions {
+		if domain.Slugify(s.Title) == sessionSlug {
+			sessionID = s.EngramID
+			break
+		}
+	}
+	if sessionID == "" {
+		return mcp.NewToolResultError(fmt.Sprintf("session not found: %q", sessionSlug)), nil
+	}
+
+	slug := domain.Slugify(content)
+	if slug == "" {
+		slug = "learning"
+	}
+	if len(slug) > 40 {
+		slug = slug[:40]
+	}
+	learningID := "learning/" + slug
+
+	// Create in Engram first
+	engramID, err := handlerDeps.Engram.SaveNode(ctx, string(domain.NodeTypeLearning), content[:min(len(content), 80)], map[string]any{
+		"content":     content,
+		"session_id":  sessionID,
+		"active":      true,
+	}, "learning/"+slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create learning in Engram: %v", err)), nil
+	}
+
+	// Cache in SQLite
+	if err := handlerDeps.GraphStore.UpsertNode(ctx, domain.GraphNode{
+		EngramID: engramID,
+		NodeType: domain.NodeTypeLearning,
+		Title:    content,
+		Active:   true,
+	}); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("created in Engram (id=%s) but failed to cache in SQLite: %v", engramID, err)), nil
+	}
+
+	// Add learned_from edge: Learning → Session
+	if err := handlerDeps.GraphStore.AddEdge(ctx, engramID, sessionID, domain.EdgeLearnedFrom); err != nil {
+		if err != domain.ErrDuplicateNode {
+			return mcp.NewToolResultError(fmt.Sprintf("created learning but failed to link to session: %v", err)), nil
+		}
+	}
+
+	// Add references edges to subareas
+	if args, ok := req.Params.Arguments.(map[string]any); ok {
+		if subSlugsVal, exists := args["subarea_slugs"]; exists {
+			if subSlugs, ok := subSlugsVal.([]any); ok {
+				for _, item := range subSlugs {
+					if subSlug, ok := item.(string); ok && subSlug != "" {
+						subareas, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeSubarea)
+						if err != nil {
+							continue
+						}
+						for _, sa := range subareas {
+							if domain.Slugify(sa.Title) == subSlug {
+								_ = handlerDeps.GraphStore.AddEdge(ctx, engramID, sa.EngramID, domain.EdgeReferences)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Add references edges to projects
+	if args, ok := req.Params.Arguments.(map[string]any); ok {
+		if projSlugsVal, exists := args["project_slugs"]; exists {
+			if projSlugs, ok := projSlugsVal.([]any); ok {
+				for _, item := range projSlugs {
+					if projSlug, ok := item.(string); ok && projSlug != "" {
+						projects, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+						if err != nil {
+							continue
+						}
+						for _, p := range projects {
+							if domain.Slugify(p.Title) == projSlug {
+								_ = handlerDeps.GraphStore.AddEdge(ctx, engramID, p.EngramID, domain.EdgeReferences)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	result := map[string]any{
+		"engram_id":    engramID,
+		"id":           learningID,
+		"content":      content,
+		"session_slug": sessionSlug,
+	}
+	data, _ := json.Marshal(result)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// handleListSessions returns sessions, optionally filtered by project.
+func handleListSessions(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	projectSlug := req.GetString("project_slug", "")
+
+	type sessionOut struct {
+		ID          string `json:"id"`
+		ProjectID   string `json:"project_id"`
+		Description string `json:"description"`
+		CreatedAt   string `json:"created_at"`
+	}
+
+	var allSessions []sessionOut
+
+	if projectSlug != "" {
+		// Find project node
+		projects, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to load projects: %v", err)), nil
+		}
+		for _, p := range projects {
+			if domain.Slugify(p.Title) == projectSlug {
+				sessions, err := handlerDeps.GraphStore.ListSessions(ctx, p.EngramID)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to load sessions: %v", err)), nil
+				}
+				for _, s := range sessions {
+					allSessions = append(allSessions, sessionOut{
+						ID:          s.ID,
+						ProjectID:   s.ProjectID,
+						Description: s.Description,
+						CreatedAt:   s.CreatedAt.Format(time.RFC3339),
+					})
+				}
+				break
+			}
+		}
+	} else {
+		// List all sessions
+		nodes, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeSession)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to load sessions: %v", err)), nil
+		}
+		for _, n := range nodes {
+			if !n.Active {
+				continue
+			}
+			allSessions = append(allSessions, sessionOut{
+				ID:          n.EngramID,
+				Description: n.Title,
+			})
+		}
+	}
+
+	data, _ := json.Marshal(allSessions)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// handleListLearnings returns learnings, optionally filtered by subarea or project.
+func handleListLearnings(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	subareaSlug := req.GetString("subarea_slug", "")
+	projectSlug := req.GetString("project_slug", "")
+
+	var subareaID string
+	if subareaSlug != "" {
+		subareas, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeSubarea)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to load subareas: %v", err)), nil
+		}
+		for _, sa := range subareas {
+			if domain.Slugify(sa.Title) == subareaSlug {
+				subareaID = sa.EngramID
+				break
+			}
+		}
+		if subareaID == "" {
+			return mcp.NewToolResultError(fmt.Sprintf("subarea not found: %q", subareaSlug)), nil
+		}
+	}
+
+	learnings, err := handlerDeps.GraphStore.ListLearnings(ctx, subareaID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to load learnings: %v", err)), nil
+	}
+
+	// Filter by project if specified
+	if projectSlug != "" {
+		projects, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to load projects: %v", err)), nil
+		}
+		var targetProjectID string
+		for _, p := range projects {
+			if domain.Slugify(p.Title) == projectSlug {
+				targetProjectID = p.EngramID
+				break
+			}
+		}
+		if targetProjectID == "" {
+			return mcp.NewToolResultError(fmt.Sprintf("project not found: %q", projectSlug)), nil
+		}
+
+		filtered := make([]domain.Learning, 0, len(learnings))
+		for _, l := range learnings {
+			for _, pid := range l.ProjectIDs {
+				if pid == targetProjectID {
+					filtered = append(filtered, l)
+					break
+				}
+			}
+		}
+		learnings = filtered
+	}
+
+	type learningOut struct {
+		ID         string   `json:"id"`
+		Content    string   `json:"content"`
+		SessionID  string   `json:"session_id"`
+		SubareaIDs []string `json:"subarea_ids"`
+		CreatedAt  string   `json:"created_at"`
+	}
+
+	result := make([]learningOut, 0, len(learnings))
+	for _, l := range learnings {
+		preview := l.Content
+		if len(preview) > 200 {
+			preview = preview[:197] + "..."
+		}
+		result = append(result, learningOut{
+			ID:         l.ID,
+			Content:    preview,
+			SessionID:  l.SessionID,
+			SubareaIDs: l.SubareaIDs,
+			CreatedAt:  l.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	data, _ := json.Marshal(result)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// handleLinkResource adds a references edge between a resource (learning node) and a subarea.
+func handleLinkResource(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	resourceID, err := req.RequireString("resource_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	subareaSlug, err := req.RequireString("subarea_slug")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Find subarea node
+	subareas, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeSubarea)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to load subareas: %v", err)), nil
+	}
+
+	var subareaID string
+	for _, sa := range subareas {
+		if domain.Slugify(sa.Title) == subareaSlug {
+			subareaID = sa.EngramID
+			break
+		}
+	}
+	if subareaID == "" {
+		return mcp.NewToolResultError(fmt.Sprintf("subarea not found: %q", subareaSlug)), nil
+	}
+
+	// Verify resource exists
+	_, err = handlerDeps.GraphStore.GetNode(ctx, resourceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("resource not found: %q", resourceID)), nil
+	}
+
+	// Add references edge
+	if err := handlerDeps.GraphStore.AddEdge(ctx, resourceID, subareaID, domain.EdgeReferences); err != nil {
+		if err == domain.ErrDuplicateNode {
+			return mcp.NewToolResultError(fmt.Sprintf("resource %q already linked to subarea %q", resourceID, subareaSlug)), nil
+		}
+		return mcp.NewToolResultError(fmt.Sprintf("failed to link resource to subarea: %v", err)), nil
+	}
+
+	result := map[string]any{
+		"resource_id":  resourceID,
+		"subarea_slug": subareaSlug,
+		"edge_label":   string(domain.EdgeReferences),
+	}
+	data, _ := json.Marshal(result)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// handleListPerson returns the user's person node.
+func handleListPerson(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	nodes, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypePerson)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to load person: %v", err)), nil
+	}
+
+	if len(nodes) == 0 {
+		return mcp.NewToolResultText(`{"message": "no person node found"}`), nil
+	}
+
+	// Return the first active person
+	for _, n := range nodes {
+		if n.Active {
+			result := map[string]any{
+				"engram_id": n.EngramID,
+				"name":      n.Title,
+				"active":    n.Active,
+			}
+			data, _ := json.Marshal(result)
+			return mcp.NewToolResultText(string(data)), nil
+		}
+	}
+
+	return mcp.NewToolResultText(`{"message": "no active person found"}`), nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

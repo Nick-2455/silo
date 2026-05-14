@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Nick-2455/marrow/internal/config"
@@ -58,11 +59,51 @@ func Bootstrap() (*Deps, error) {
 		return nil, fmt.Errorf("app: init engram client: %w", err)
 	}
 
-	return &Deps{
+	deps := &Deps{
 		Config:     cfg,
 		Store:      s,
 		Engram:     engramClient,
 		Loader:     loader,
 		GraphStore: s, // *Store implements domain.GraphStore
-	}, nil
+	}
+
+	// 4. Auto-create default person node if none exists
+	ctx := context.Background()
+	if err := ensureDefaultPerson(ctx, deps); err != nil {
+		// Non-fatal — log but continue
+		_ = fmt.Errorf("app: ensure default person: %w", err)
+	}
+
+	return deps, nil
+}
+
+// ensureDefaultPerson creates a default person node if no person exists in the graph.
+func ensureDefaultPerson(ctx context.Context, deps *Deps) error {
+	// Check if any person node exists
+	nodes, err := deps.GraphStore.ListNodesByType(ctx, domain.NodeTypePerson)
+	if err != nil {
+		return err
+	}
+	if len(nodes) > 0 {
+		return nil // person already exists
+	}
+
+	// Create default person
+	personID := "person/default"
+	if err := deps.GraphStore.UpsertPerson(ctx, domain.GraphNode{
+		EngramID: personID,
+		NodeType: domain.NodeTypePerson,
+		Title:    "Nico",
+		Active:   true,
+	}); err != nil {
+		return fmt.Errorf("upsert person node: %w", err)
+	}
+
+	// Also save to Engram
+	_, _ = deps.Engram.SaveNode(ctx, string(domain.NodeTypePerson), "Nico", map[string]any{
+		"name":   "Nico",
+		"active": true,
+	}, "person/default")
+
+	return nil
 }

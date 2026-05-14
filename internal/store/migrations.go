@@ -25,7 +25,7 @@ var migrations = []string{
 	// Graph topology tables (Phase 1)
 	`CREATE TABLE IF NOT EXISTS graph_nodes (
 		engram_id TEXT PRIMARY KEY,
-		node_type TEXT NOT NULL CHECK(node_type IN ('domain','subarea','project')),
+		node_type TEXT NOT NULL CHECK(node_type IN ('domain','subarea','project','session','learning','person')),
 		title TEXT NOT NULL,
 		active INTEGER NOT NULL DEFAULT 1,
 		cached_at DATETIME NOT NULL DEFAULT (datetime('now'))

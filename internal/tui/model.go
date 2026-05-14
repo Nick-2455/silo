@@ -62,6 +62,16 @@ type Model struct {
 	SelectedProject *domain.Project
 	ProjectSubareas []domain.Subarea
 
+	// Sessions screen state
+	Sessions         []domain.Session
+	SessionCursor    int
+	SelectedSession  *domain.Session
+	SessionLearnings []domain.Learning
+
+	// Learnings screen state
+	Learnings      []domain.Learning
+	LearningCursor int
+
 	// Dependencies
 	Deps *app.Deps
 }
@@ -124,6 +134,35 @@ func (m *Model) seedDemoDataCmd() tea.Cmd {
 
 		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/publora", NodeType: domain.NodeTypeProject, Title: "publora", Active: false})
 		_ = store.AddEdge(ctx, "project/publora", "subarea/dev/ios", domain.EdgeAppliesTo)
+
+		// Sessions
+		s1ID := "session/debug-engram-client"
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s1ID, NodeType: domain.NodeTypeSession, Title: "Debug de Engram MCP client", Active: true})
+		_ = store.AddEdge(ctx, s1ID, "project/marrow", domain.EdgeWorkedOn)
+
+		s2ID := "session/refactor-tui"
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s2ID, NodeType: domain.NodeTypeSession, Title: "Refactor de TUI a arquitectura Gentle AI", Active: true})
+		_ = store.AddEdge(ctx, s2ID, "project/marrow", domain.EdgeWorkedOn)
+
+		// Learnings
+		l1ID := "learning/mem-update-replaces"
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l1ID, NodeType: domain.NodeTypeLearning, Title: "mem_update reemplaza el contenido entero — no mergea", Active: true})
+		_ = store.AddEdge(ctx, l1ID, s1ID, domain.EdgeLearnedFrom)
+		_ = store.AddEdge(ctx, l1ID, "subarea/dev/backend", domain.EdgeAppliesTo)
+		_ = store.AddEdge(ctx, l1ID, "project/marrow", domain.EdgeAppliesTo)
+
+		l2ID := "learning/engram-json-ids"
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l2ID, NodeType: domain.NodeTypeLearning, Title: "Engram responde JSON con id numérico, no texto con #", Active: true})
+		_ = store.AddEdge(ctx, l2ID, s1ID, domain.EdgeLearnedFrom)
+		_ = store.AddEdge(ctx, l2ID, "subarea/dev/backend", domain.EdgeAppliesTo)
+		_ = store.AddEdge(ctx, l2ID, "project/marrow", domain.EdgeAppliesTo)
+
+		l3ID := "learning/screen-router-pattern"
+		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l3ID, NodeType: domain.NodeTypeLearning, Title: "Patrón Screen+Router separa rendering de lógica de navegación", Active: true})
+		_ = store.AddEdge(ctx, l3ID, s2ID, domain.EdgeLearnedFrom)
+		_ = store.AddEdge(ctx, l3ID, "subarea/dev/backend", domain.EdgeAppliesTo)
+		_ = store.AddEdge(ctx, l3ID, "subarea/dev/ios", domain.EdgeAppliesTo)
+		_ = store.AddEdge(ctx, l3ID, "project/marrow", domain.EdgeAppliesTo)
 
 		return nil
 	}
@@ -203,6 +242,12 @@ func (m *Model) View() string {
 		b.WriteString(screens.RenderProjectList(m.Projects, m.ProjectCursor))
 	case ScreenProjectDetail:
 		b.WriteString(screens.RenderProjectDetail(*m.SelectedProject, m.ProjectSubareas, m.Cursor))
+	case ScreenSessions:
+		b.WriteString(screens.RenderSessionList(m.Sessions, m.SessionCursor))
+	case ScreenSessionDetail:
+		b.WriteString(screens.RenderSessionDetail(*m.SelectedSession, m.SessionLearnings, m.Cursor))
+	case ScreenLearnings:
+		b.WriteString(screens.RenderLearningList(m.Learnings, m.LearningCursor))
 	}
 
 	b.WriteString("\n")
@@ -264,6 +309,18 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.loadProjects()
 				return m, nil
 			}
+		case "s":
+			if m.Screen != ScreenSessions && m.Screen != ScreenSessionDetail {
+				m.setScreen(ScreenSessions)
+				m.loadSessions()
+				return m, nil
+			}
+		case "l":
+			if m.Screen != ScreenLearnings {
+				m.setScreen(ScreenLearnings)
+				m.loadLearnings()
+				return m, nil
+			}
 		}
 	}
 
@@ -290,6 +347,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.handleProjectsKey(msg)
 	case ScreenProjectDetail:
 		return m, m.handleProjectDetailKey(msg)
+	case ScreenSessions:
+		return m, m.handleSessionsKey(msg)
+	case ScreenSessionDetail:
+		return m, m.handleSessionDetailKey(msg)
+	case ScreenLearnings:
+		return m, m.handleLearningsKey(msg)
 	}
 
 	return m, nil
@@ -337,6 +400,18 @@ func (m *Model) handleEscape() (tea.Model, tea.Cmd) {
 	case ScreenProjectDetail:
 		m.Screen = ScreenProjects
 		m.Cursor = 0
+		return m, nil
+	case ScreenSessions:
+		m.Screen = ScreenDashboard
+		m.SessionCursor = 0
+		return m, nil
+	case ScreenSessionDetail:
+		m.Screen = ScreenSessions
+		m.Cursor = 0
+		return m, nil
+	case ScreenLearnings:
+		m.Screen = ScreenDashboard
+		m.LearningCursor = 0
 		return m, nil
 	default:
 		return m, nil
@@ -677,6 +752,132 @@ func (m *Model) handleProjectDetailKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// ── Sessions ───────────────────────────────────────────────────────────────
+
+func (m *Model) handleSessionsKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		if m.SessionCursor > 0 {
+			m.SessionCursor--
+		}
+	case "down", "j":
+		if m.SessionCursor < len(m.Sessions)-1 {
+			m.SessionCursor++
+		}
+	case "enter":
+		if len(m.Sessions) > 0 && m.SessionCursor < len(m.Sessions) {
+			m.SelectedSession = &m.Sessions[m.SessionCursor]
+			m.setScreen(ScreenSessionDetail)
+			m.loadSessionLearnings()
+		}
+	}
+	return nil
+}
+
+func (m *Model) handleSessionDetailKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		if m.Cursor > 0 {
+			m.Cursor--
+		}
+	case "down", "j":
+		if m.Cursor < len(m.SessionLearnings)-1 {
+			m.Cursor++
+		}
+	}
+	return nil
+}
+
+func (m *Model) loadSessions() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Load sessions from all projects
+	projects, err := m.Deps.GraphStore.ListActiveProjects(ctx)
+	if err != nil {
+		m.StatusMsg = fmt.Sprintf("load projects: %v", err)
+		return
+	}
+
+	var allSessions []domain.Session
+	for _, p := range projects {
+		// Use the project's engram ID — reconstruct from slug
+		projectNodes, err := m.Deps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+		if err != nil {
+			continue
+		}
+		for _, pn := range projectNodes {
+			if domain.Slugify(pn.Title) == p.Slug {
+				sessions, err := m.Deps.GraphStore.ListSessions(ctx, pn.EngramID)
+				if err == nil {
+					allSessions = append(allSessions, sessions...)
+				}
+				break
+			}
+		}
+	}
+
+	m.Sessions = allSessions
+	m.SessionCursor = 0
+	m.SelectedSession = nil
+}
+
+func (m *Model) loadSessionLearnings() {
+	if m.SelectedSession == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Find learnings linked to this session via learned_from edge
+	learnings, err := m.Deps.GraphStore.ListLearnings(ctx, "")
+	if err != nil {
+		m.StatusMsg = fmt.Sprintf("load learnings: %v", err)
+		return
+	}
+
+	var filtered []domain.Learning
+	for _, l := range learnings {
+		if l.SessionID == m.SelectedSession.ID {
+			filtered = append(filtered, l)
+		}
+	}
+
+	m.SessionLearnings = filtered
+	m.Cursor = 0
+}
+
+// ── Learnings ──────────────────────────────────────────────────────────────
+
+func (m *Model) handleLearningsKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		if m.LearningCursor > 0 {
+			m.LearningCursor--
+		}
+	case "down", "j":
+		if m.LearningCursor < len(m.Learnings)-1 {
+			m.LearningCursor++
+		}
+	}
+	return nil
+}
+
+func (m *Model) loadLearnings() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	learnings, err := m.Deps.GraphStore.ListLearnings(ctx, "")
+	if err != nil {
+		m.StatusMsg = fmt.Sprintf("load learnings: %v", err)
+		return
+	}
+
+	m.Learnings = learnings
+	m.LearningCursor = 0
+}
+
 // ── Commands ───────────────────────────────────────────────────────────────
 
 func (m *Model) refreshResourcesCmd() tea.Cmd {
@@ -755,6 +956,12 @@ func (m *Model) footer() string {
 	case ScreenProjects:
 		keys = "↑/↓:navigate  enter:details  esc:back  q:quit"
 	case ScreenProjectDetail:
+		keys = "↑/↓:navigate  esc:back  q:quit"
+	case ScreenSessions:
+		keys = "↑/↓:navigate  enter:details  esc:back  q:quit"
+	case ScreenSessionDetail:
+		keys = "↑/↓:navigate  esc:back  q:quit"
+	case ScreenLearnings:
 		keys = "↑/↓:navigate  esc:back  q:quit"
 	default:
 		keys = "q:quit"

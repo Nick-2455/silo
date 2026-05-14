@@ -20,10 +20,12 @@ var (
 
 // Sentinel errors for graph store operations.
 var (
-	ErrNodeNotFound   = errors.New("graph: node not found")
-	ErrDuplicateNode  = errors.New("graph: node with same name already exists")
-	ErrDomainNotEmpty = errors.New("graph: cannot delete domain with active subareas")
-	ErrEngramUnavail  = errors.New("graph: engram unavailable, writes rejected")
+	ErrNodeNotFound      = errors.New("graph: node not found")
+	ErrDuplicateNode     = errors.New("graph: node with same name already exists")
+	ErrDomainNotEmpty    = errors.New("graph: cannot delete domain with active subareas")
+	ErrEngramUnavail     = errors.New("graph: engram unavailable, writes rejected")
+	ErrSessionNotFound   = errors.New("graph: session not found")
+	ErrLearningNotFound  = errors.New("graph: learning not found")
 )
 
 // Sentinel errors for config operations.

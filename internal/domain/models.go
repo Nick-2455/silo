@@ -65,26 +65,37 @@ func (c *SearchCache) IsExpired() bool {
 type NodeType string
 
 const (
-	NodeTypeDomain  NodeType = "domain"
-	NodeTypeSubarea NodeType = "subarea"
-	NodeTypeProject NodeType = "project"
+	NodeTypeDomain   NodeType = "domain"
+	NodeTypeSubarea  NodeType = "subarea"
+	NodeTypeProject  NodeType = "project"
+	NodeTypeSession  NodeType = "session"
+	NodeTypeLearning NodeType = "learning"
+	NodeTypePerson   NodeType = "person"
 )
 
 // Valid reports whether nt is a recognized node type.
 func (nt NodeType) Valid() bool {
 	switch nt {
-	case NodeTypeDomain, NodeTypeSubarea, NodeTypeProject:
+	case NodeTypeDomain, NodeTypeSubarea, NodeTypeProject, NodeTypeSession, NodeTypeLearning, NodeTypePerson:
 		return true
 	}
 	return false
+}
+
+// AllNodeTypes returns all valid node type values.
+func AllNodeTypes() []NodeType {
+	return []NodeType{NodeTypeDomain, NodeTypeSubarea, NodeTypeProject, NodeTypeSession, NodeTypeLearning, NodeTypePerson}
 }
 
 // EdgeLabel defines valid graph edge types.
 type EdgeLabel string
 
 const (
-	EdgeContains  EdgeLabel = "contains"   // Domain → Subarea
-	EdgeAppliesTo EdgeLabel = "applies_to" // Project → Subarea
+	EdgeContains      EdgeLabel = "contains"       // Domain → Subarea
+	EdgeAppliesTo     EdgeLabel = "applies_to"     // Project → Subarea
+	EdgeWorkedOn      EdgeLabel = "worked_on"      // Project → Session
+	EdgeLearnedFrom   EdgeLabel = "learned_from"   // Learning → Session
+	EdgeReferences    EdgeLabel = "references"     // Resource → Subarea
 )
 
 // GraphNode is the SQLite-cached node topology record.
@@ -132,6 +143,31 @@ type Project struct {
 type DomainWithSubareas struct {
 	Domain   GraphNode   `json:"domain"`
 	Subareas []GraphNode `json:"subareas"`
+}
+
+// Session represents a learning or work session tracked within a Project.
+type Session struct {
+	ID          string    `json:"id"`
+	ProjectID   string    `json:"project_id"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Learning represents a knowledge artifact captured during a Session.
+type Learning struct {
+	ID          string    `json:"id"`
+	SessionID   string    `json:"session_id"`
+	Content     string    `json:"content"`
+	SubareaIDs  []string  `json:"subarea_ids"`
+	ProjectIDs  []string  `json:"project_ids"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Person represents a user tracked in the knowledge graph.
+type Person struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Active bool   `json:"active"`
 }
 
 // Slugify generates a deterministic slug from a name.
