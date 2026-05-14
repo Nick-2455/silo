@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/marrow/internal/obsidian"
 )
 
 // handleListDomains returns all domains with their nested subareas.
@@ -785,6 +786,27 @@ func handleListPerson(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	return mcp.NewToolResultText(`{"message": "no active person found"}`), nil
+}
+
+// handleSyncObsidian exports the complete graph as markdown files for Obsidian.
+func handleSyncObsidian(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	vaultPath := req.GetString("vault_path", "")
+	if vaultPath == "" {
+		return mcp.NewToolResultError("no vault path configured"), nil
+	}
+
+	syncer := &obsidian.Syncer{
+		Store:     handlerDeps.GraphStore,
+		VaultPath: vaultPath,
+	}
+
+	report, err := syncer.SyncAll(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("obsidian sync failed: %v", err)), nil
+	}
+
+	data, _ := json.Marshal(report)
+	return mcp.NewToolResultText(string(data)), nil
 }
 
 func min(a, b int) int {

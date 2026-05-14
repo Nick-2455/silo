@@ -40,6 +40,7 @@ func NewServer() *server.MCPServer {
 	s.AddTool(listLearningsTool(), handleListLearnings)
 	s.AddTool(linkResourceTool(), handleLinkResource)
 	s.AddTool(listPersonTool(), handleListPerson)
+	s.AddTool(syncObsidianTool(), handleSyncObsidian)
 
 	return s
 }
@@ -245,5 +246,15 @@ func linkResourceTool() mcp.Tool {
 func listPersonTool() mcp.Tool {
 	return mcp.NewTool("list_person",
 		mcp.WithDescription("Get the user's person node from the knowledge graph."),
+	)
+}
+
+func syncObsidianTool() mcp.Tool {
+	return mcp.NewTool("sync_obsidian",
+		mcp.WithDescription("Export the complete Marrow knowledge graph as markdown files with YAML frontmatter and wikilinks for Obsidian. Creates a Marrow/ directory structure under the specified vault path."),
+		mcp.WithString("vault_path",
+			mcp.Required(),
+			mcp.Description("Absolute path to the Obsidian vault root. The graph will be exported to VaultPath/Marrow/."),
+		),
 	)
 }

@@ -66,9 +66,10 @@ type GraphStore interface {
 
 // Config holds Marrow configuration values.
 type Config struct {
-	Profile    string `yaml:"profile"`
-	EngramPath string `yaml:"engram_path"`
-	ModelPrefs struct {
+	Profile           string `yaml:"profile"`
+	EngramPath        string `yaml:"engram_path"`
+	ObsidianVaultPath string `yaml:"obsidian_vault_path,omitempty"`
+	ModelPrefs        struct {
 		Triage  string `yaml:"triage"`
 		Summary string `yaml:"summary"`
 	} `yaml:"model_prefs"`

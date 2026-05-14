@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/Nick-2455/marrow/internal/domain"
+import (
+	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/marrow/internal/obsidian"
+)
 
 // tickMsg triggers periodic health checks.
 type tickMsg struct{}
@@ -25,5 +28,11 @@ type AddSubmitMsg struct {
 // TriageMoveMsg is sent when a triage move operation completes.
 type TriageMoveMsg struct {
 	Bucket domain.Bucket
+	Err    string
+}
+
+// SyncDoneMsg is sent when an Obsidian sync completes.
+type SyncDoneMsg struct {
+	Report *obsidian.SyncReport
 	Err    string
 }

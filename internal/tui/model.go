@@ -10,6 +10,7 @@ import (
 
 	"github.com/Nick-2455/marrow/internal/app"
 	"github.com/Nick-2455/marrow/internal/domain"
+	"github.com/Nick-2455/marrow/internal/obsidian"
 	"github.com/Nick-2455/marrow/internal/tui/screens"
 	"github.com/Nick-2455/marrow/internal/tui/styles"
 )
@@ -69,8 +70,12 @@ type Model struct {
 	SessionLearnings []domain.Learning
 
 	// Learnings screen state
-	Learnings      []domain.Learning
+	Learnings     []domain.Learning
 	LearningCursor int
+
+	// Obsidian sync state
+	EditingVaultPath bool
+	SyncVaultPath    string
 
 	// Dependencies
 	Deps *app.Deps
@@ -211,6 +216,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.StatusMsg = "Resource moved to " + string(msg.Bucket)
 			return m, m.refreshResourcesCmd()
 		}
+
+	case SyncDoneMsg:
+		if msg.Err != "" {
+			m.StatusMsg = "Sync error: " + msg.Err
+		} else if msg.Report != nil {
+			m.StatusMsg = fmt.Sprintf("Synced %d nodes, %d edges to Obsidian", msg.Report.NodesWritten, msg.Report.EdgesWritten)
+		}
 	}
 
 	return m, nil
@@ -224,6 +236,12 @@ func (m *Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(sepLine)
 	b.WriteString("\n\n")
+
+	// Vault path prompt (shown over any screen when editing)
+	if m.EditingVaultPath {
+		b.WriteString("Obsidian vault path:\n")
+		b.WriteString(fmt.Sprintf("  %s▌\n\n", m.SyncVaultPath))
+	}
 
 	switch m.Screen {
 	case ScreenDashboard:
@@ -262,6 +280,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global quit
 	if msg.String() == "q" || msg.String() == "ctrl+c" || msg.Type == tea.KeyCtrlC {
 		return m, tea.Quit
+	}
+
+	// Vault path input mode
+	if m.EditingVaultPath {
+		return m.handleVaultPathInput(msg)
 	}
 
 	// Global shortcuts (not when typing in add form)
@@ -319,6 +342,18 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.Screen != ScreenLearnings {
 				m.setScreen(ScreenLearnings)
 				m.loadLearnings()
+				return m, nil
+			}
+		case "o":
+			if m.Screen == ScreenDashboard {
+				if m.Config.ObsidianVaultPath != "" {
+					m.StatusMsg = "Syncing to Obsidian..."
+					return m, m.syncObsidianCmd()
+				}
+				// No vault path yet — ask interactively
+				m.EditingVaultPath = true
+				m.SyncVaultPath = ""
+				m.StatusMsg = "Enter Obsidian vault path and press Enter"
 				return m, nil
 			}
 		}
@@ -419,7 +454,33 @@ func (m *Model) handleEscape() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) isInputFocused() bool {
-	return m.Screen == ScreenAdd
+	return m.Screen == ScreenAdd || m.EditingVaultPath
+}
+
+func (m *Model) handleVaultPathInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		if m.SyncVaultPath != "" {
+			m.EditingVaultPath = false
+			m.Config.ObsidianVaultPath = m.SyncVaultPath
+			_ = m.Deps.Loader.Save(m.Config)
+			m.StatusMsg = "Syncing to Obsidian..."
+			return m, m.syncObsidianCmd()
+		}
+		return m, nil
+	case tea.KeyEscape:
+		m.EditingVaultPath = false
+		m.SyncVaultPath = ""
+		m.StatusMsg = ""
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.SyncVaultPath) > 0 {
+			m.SyncVaultPath = m.SyncVaultPath[:len(m.SyncVaultPath)-1]
+		}
+	case tea.KeyRunes:
+		m.SyncVaultPath += string(msg.Runes)
+	}
+	return m, nil
 }
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
@@ -916,6 +977,23 @@ func (m *Model) healthCheckCmd() tea.Cmd {
 	}
 }
 
+func (m *Model) syncObsidianCmd() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		syncer := obsidian.Syncer{
+			Store:     m.Deps.GraphStore,
+			VaultPath: m.Config.ObsidianVaultPath,
+		}
+		report, err := syncer.SyncAll(ctx)
+		if err != nil {
+			return SyncDoneMsg{Err: err.Error()}
+		}
+		return SyncDoneMsg{Report: report}
+	}
+}
+
 func (m *Model) tickCmd() tea.Cmd {
 	return tea.Tick(healthInterval, func(_ time.Time) tea.Msg {
 		return tickMsg{}
@@ -936,7 +1014,7 @@ func (m *Model) footer() string {
 	var keys string
 	switch m.Screen {
 	case ScreenDashboard:
-		keys = "↑/↓:navigate  enter:list  a:add  q:quit"
+		keys = "↑/↓:navigate  enter:list  a:add  g:domains  p:projects  s:sessions  l:learnings  o:sync  q:quit"
 	case ScreenList:
 		keys = "↑/↓:navigate  enter:triage  /:search  esc:back  q:quit"
 	case ScreenAdd:
