@@ -8,6 +8,12 @@ import (
 // tickMsg triggers periodic health checks.
 type tickMsg struct{}
 
+// windowSizeMsg handles terminal resize (wraps tea.WindowSizeMsg to avoid import in messages).
+type windowSizeMsg struct {
+	Width  int
+	Height int
+}
+
 // HealthResultMsg carries the result of a health check.
 type HealthResultMsg struct {
 	OK bool
@@ -35,4 +41,28 @@ type TriageMoveMsg struct {
 type SyncDoneMsg struct {
 	Report *obsidian.SyncReport
 	Err    string
+}
+
+// DomainTreeLoadedMsg carries the result of loading the domain tree.
+type DomainTreeLoadedMsg struct {
+	Tree []domain.DomainWithSubareas
+	Err  string
+}
+
+// ProjectsLoadedMsg carries the result of loading projects.
+type ProjectsLoadedMsg struct {
+	Projects []domain.Project
+	Err      string
+}
+
+// SessionsLoadedMsg carries the result of loading sessions.
+type SessionsLoadedMsg struct {
+	Sessions []domain.Session
+	Err      string
+}
+
+// LearningsLoadedMsg carries the result of loading learnings.
+type LearningsLoadedMsg struct {
+	Learnings []domain.Learning
+	Err       string
 }

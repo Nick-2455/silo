@@ -15,12 +15,16 @@ type Store struct {
 // Open opens a connection to the SQLite database at the given path.
 // The database is created if it does not exist.
 func Open(dbPath string) (*Store, error) {
-	db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(15000)&_pragma=synchronous(NORMAL)")
 	if err != nil {
 		return nil, fmt.Errorf("store: open sqlite: %w", err)
 	}
 
-	// Verify the connection works
+	// SQLite requires serialized access — single connection prevents SQLITE_BUSY
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	// Verify the connection works and apply pragmas
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: ping sqlite: %w", err)

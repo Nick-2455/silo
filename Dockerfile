@@ -12,7 +12,8 @@ FROM alpine:3.21
 RUN apk add --no-cache curl bash
 
 # Install Engram
-RUN curl -sSL https://raw.githubusercontent.com/Gentleman-Programming/engram/main/install.sh | bash
+RUN ENGRAM_VERSION=$(curl -sL https://api.github.com/repos/Gentleman-Programming/engram/releases/latest | grep '"tag_name"' | sed 's/.*"v\(.*\)".*/\1/') && \
+    curl -sSL "https://github.com/Gentleman-Programming/engram/releases/download/v${ENGRAM_VERSION}/engram_${ENGRAM_VERSION}_linux_amd64.tar.gz" | tar xz -C /usr/local/bin engram
 
 # Copy marrow binary
 COPY --from=builder /app/marrow /usr/local/bin/marrow

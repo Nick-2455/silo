@@ -17,7 +17,8 @@ import (
 
 const (
 	defaultEngramBin = "engram"
-	callTimeout      = 10 * time.Second
+	callTimeout      = 5 * time.Second
+	connectTimeout   = 3 * time.Second
 )
 
 // MCPClient implements domain.EngramClient via MCP stdio to engram.
@@ -40,7 +41,7 @@ func NewClient(engramPath string) (*MCPClient, error) {
 	}
 
 	// Initialize the MCP connection
-	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
 
 	initReq := mcp.InitializeRequest{}

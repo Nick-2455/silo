@@ -52,11 +52,14 @@ func Bootstrap() (*Deps, error) {
 		return nil, fmt.Errorf("app: migrate store: %w", err)
 	}
 
-	// 3. Initialize Engram MCP client
-	engramClient, err := engram.NewClient(cfg.EngramPath)
+	// 3. Initialize Engram MCP client (non-fatal if unavailable)
+	var engramClient domain.EngramClient
+	client, err := engram.NewClient(cfg.EngramPath)
 	if err != nil {
-		_ = s.Close()
-		return nil, fmt.Errorf("app: init engram client: %w", err)
+		_ = fmt.Errorf("app: init engram client (running in degraded mode): %w", err)
+		engramClient = &engram.NoopClient{}
+	} else {
+		engramClient = client
 	}
 
 	deps := &Deps{
@@ -64,17 +67,81 @@ func Bootstrap() (*Deps, error) {
 		Store:      s,
 		Engram:     engramClient,
 		Loader:     loader,
-		GraphStore: s, // *Store implements domain.GraphStore
+		GraphStore: s,
 	}
 
-	// 4. Auto-create default person node if none exists
+	// 4. Seed demo data if graph is empty (before TUI starts — no contention)
 	ctx := context.Background()
+	if err := seedDemoData(ctx, deps); err != nil {
+		_ = fmt.Errorf("app: seed demo data: %w", err)
+	}
+
+	// 5. Auto-create default person node if none exists
 	if err := ensureDefaultPerson(ctx, deps); err != nil {
-		// Non-fatal — log but continue
 		_ = fmt.Errorf("app: ensure default person: %w", err)
 	}
 
 	return deps, nil
+}
+
+// seedDemoData populates the graph with sample data if it's empty.
+func seedDemoData(ctx context.Context, deps *Deps) error {
+	store := deps.GraphStore
+
+	domains, err := store.ListNodesByType(ctx, domain.NodeTypeDomain)
+	if err != nil || len(domains) > 0 {
+		return err
+	}
+
+	devID := "domain/dev"
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: devID, NodeType: domain.NodeTypeDomain, Title: "Dev", Active: true})
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/dev/backend", NodeType: domain.NodeTypeSubarea, Title: "Backend", Active: true})
+	_ = store.AddEdge(ctx, devID, "subarea/dev/backend", domain.EdgeContains)
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/dev/ios", NodeType: domain.NodeTypeSubarea, Title: "iOS", Active: true})
+	_ = store.AddEdge(ctx, devID, "subarea/dev/ios", domain.EdgeContains)
+
+	filoID := "domain/filosofia"
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: filoID, NodeType: domain.NodeTypeDomain, Title: "Filosofía", Active: true})
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/filosofia/estoicismo", NodeType: domain.NodeTypeSubarea, Title: "Estoicismo", Active: true})
+	_ = store.AddEdge(ctx, filoID, "subarea/filosofia/estoicismo", domain.EdgeContains)
+
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/marrow", NodeType: domain.NodeTypeProject, Title: "marrow", Active: true})
+	_ = store.AddEdge(ctx, "project/marrow", "subarea/dev/backend", domain.EdgeAppliesTo)
+
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/kitting-inspection", NodeType: domain.NodeTypeProject, Title: "kitting-inspection", Active: true})
+	_ = store.AddEdge(ctx, "project/kitting-inspection", "subarea/dev/backend", domain.EdgeAppliesTo)
+
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/publora", NodeType: domain.NodeTypeProject, Title: "publora", Active: false})
+	_ = store.AddEdge(ctx, "project/publora", "subarea/dev/ios", domain.EdgeAppliesTo)
+
+	s1ID := "session/debug-engram-client"
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s1ID, NodeType: domain.NodeTypeSession, Title: "Debug de Engram MCP client", Active: true})
+	_ = store.AddEdge(ctx, s1ID, "project/marrow", domain.EdgeWorkedOn)
+
+	s2ID := "session/refactor-tui"
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s2ID, NodeType: domain.NodeTypeSession, Title: "Refactor de TUI a arquitectura Gentle AI", Active: true})
+	_ = store.AddEdge(ctx, s2ID, "project/marrow", domain.EdgeWorkedOn)
+
+	l1ID := "learning/mem-update-replaces"
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l1ID, NodeType: domain.NodeTypeLearning, Title: "mem_update reemplaza el contenido entero — no mergea", Active: true})
+	_ = store.AddEdge(ctx, l1ID, s1ID, domain.EdgeLearnedFrom)
+	_ = store.AddEdge(ctx, l1ID, "subarea/dev/backend", domain.EdgeAppliesTo)
+	_ = store.AddEdge(ctx, l1ID, "project/marrow", domain.EdgeAppliesTo)
+
+	l2ID := "learning/engram-json-ids"
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l2ID, NodeType: domain.NodeTypeLearning, Title: "Engram responde JSON con id numérico, no texto con #", Active: true})
+	_ = store.AddEdge(ctx, l2ID, s1ID, domain.EdgeLearnedFrom)
+	_ = store.AddEdge(ctx, l2ID, "subarea/dev/backend", domain.EdgeAppliesTo)
+	_ = store.AddEdge(ctx, l2ID, "project/marrow", domain.EdgeAppliesTo)
+
+	l3ID := "learning/screen-router-pattern"
+	_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l3ID, NodeType: domain.NodeTypeLearning, Title: "Patrón Screen+Router separa rendering de lógica de navegación", Active: true})
+	_ = store.AddEdge(ctx, l3ID, s2ID, domain.EdgeLearnedFrom)
+	_ = store.AddEdge(ctx, l3ID, "subarea/dev/backend", domain.EdgeAppliesTo)
+	_ = store.AddEdge(ctx, l3ID, "subarea/dev/ios", domain.EdgeAppliesTo)
+	_ = store.AddEdge(ctx, l3ID, "project/marrow", domain.EdgeAppliesTo)
+
+	return nil
 }
 
 // ensureDefaultPerson creates a default person node if no person exists in the graph.
@@ -99,11 +166,12 @@ func ensureDefaultPerson(ctx context.Context, deps *Deps) error {
 		return fmt.Errorf("upsert person node: %w", err)
 	}
 
-	// Also save to Engram
-	_, _ = deps.Engram.SaveNode(ctx, string(domain.NodeTypePerson), "Nico", map[string]any{
-		"name":   "Nico",
-		"active": true,
-	}, "person/default")
+	if deps.Engram.IsReachable(ctx) {
+		_, _ = deps.Engram.SaveNode(ctx, string(domain.NodeTypePerson), "Nico", map[string]any{
+			"name":   "Nico",
+			"active": true,
+		}, "person/default")
+	}
 
 	return nil
 }

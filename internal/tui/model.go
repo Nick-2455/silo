@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	sepLine        = "────────────────────────────────────────────────────"
+	defaultWidth   = 80
+	defaultHeight  = 24
 	maxTitleLen    = 50
 	maxURLLen      = 55
 	healthInterval = 30 * time.Second
@@ -90,6 +91,8 @@ func NewModel(deps *app.Deps) tea.Model {
 		EngramOK: true,
 		Config:   cfg,
 		Deps:     deps,
+		Width:    defaultWidth,
+		Height:   defaultHeight,
 	}
 }
 
@@ -99,78 +102,7 @@ func (m *Model) Init() tea.Cmd {
 		m.refreshResourcesCmd(),
 		m.healthCheckCmd(),
 		m.tickCmd(),
-		m.seedDemoDataCmd(),
 	)
-}
-
-// seedDemoDataCmd seeds demo domains, subareas, and projects if the graph is empty.
-// TODO: Remove once MCP tools handle taxonomy/project creation (PR 3).
-func (m *Model) seedDemoDataCmd() tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-		store := m.Deps.GraphStore
-
-		// Only seed if no domains exist
-		domains, err := store.ListNodesByType(ctx, domain.NodeTypeDomain)
-		if err != nil || len(domains) > 0 {
-			return nil
-		}
-
-		// Dev domain
-		devID := "domain/dev"
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: devID, NodeType: domain.NodeTypeDomain, Title: "Dev", Active: true})
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/dev/backend", NodeType: domain.NodeTypeSubarea, Title: "Backend", Active: true})
-		_ = store.AddEdge(ctx, devID, "subarea/dev/backend", domain.EdgeContains)
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/dev/ios", NodeType: domain.NodeTypeSubarea, Title: "iOS", Active: true})
-		_ = store.AddEdge(ctx, devID, "subarea/dev/ios", domain.EdgeContains)
-
-		// Filosofía domain
-		filoID := "domain/filosofia"
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: filoID, NodeType: domain.NodeTypeDomain, Title: "Filosofía", Active: true})
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "subarea/filosofia/estoicismo", NodeType: domain.NodeTypeSubarea, Title: "Estoicismo", Active: true})
-		_ = store.AddEdge(ctx, filoID, "subarea/filosofia/estoicismo", domain.EdgeContains)
-
-		// Projects
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/marrow", NodeType: domain.NodeTypeProject, Title: "marrow", Active: true})
-		_ = store.AddEdge(ctx, "project/marrow", "subarea/dev/backend", domain.EdgeAppliesTo)
-
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/kitting-inspection", NodeType: domain.NodeTypeProject, Title: "kitting-inspection", Active: true})
-		_ = store.AddEdge(ctx, "project/kitting-inspection", "subarea/dev/backend", domain.EdgeAppliesTo)
-
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: "project/publora", NodeType: domain.NodeTypeProject, Title: "publora", Active: false})
-		_ = store.AddEdge(ctx, "project/publora", "subarea/dev/ios", domain.EdgeAppliesTo)
-
-		// Sessions
-		s1ID := "session/debug-engram-client"
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s1ID, NodeType: domain.NodeTypeSession, Title: "Debug de Engram MCP client", Active: true})
-		_ = store.AddEdge(ctx, s1ID, "project/marrow", domain.EdgeWorkedOn)
-
-		s2ID := "session/refactor-tui"
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: s2ID, NodeType: domain.NodeTypeSession, Title: "Refactor de TUI a arquitectura Gentle AI", Active: true})
-		_ = store.AddEdge(ctx, s2ID, "project/marrow", domain.EdgeWorkedOn)
-
-		// Learnings
-		l1ID := "learning/mem-update-replaces"
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l1ID, NodeType: domain.NodeTypeLearning, Title: "mem_update reemplaza el contenido entero — no mergea", Active: true})
-		_ = store.AddEdge(ctx, l1ID, s1ID, domain.EdgeLearnedFrom)
-		_ = store.AddEdge(ctx, l1ID, "subarea/dev/backend", domain.EdgeAppliesTo)
-		_ = store.AddEdge(ctx, l1ID, "project/marrow", domain.EdgeAppliesTo)
-
-		l2ID := "learning/engram-json-ids"
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l2ID, NodeType: domain.NodeTypeLearning, Title: "Engram responde JSON con id numérico, no texto con #", Active: true})
-		_ = store.AddEdge(ctx, l2ID, s1ID, domain.EdgeLearnedFrom)
-		_ = store.AddEdge(ctx, l2ID, "subarea/dev/backend", domain.EdgeAppliesTo)
-		_ = store.AddEdge(ctx, l2ID, "project/marrow", domain.EdgeAppliesTo)
-
-		l3ID := "learning/screen-router-pattern"
-		_ = store.UpsertNode(ctx, domain.GraphNode{EngramID: l3ID, NodeType: domain.NodeTypeLearning, Title: "Patrón Screen+Router separa rendering de lógica de navegación", Active: true})
-		_ = store.AddEdge(ctx, l3ID, s2ID, domain.EdgeLearnedFrom)
-		_ = store.AddEdge(ctx, l3ID, "subarea/dev/backend", domain.EdgeAppliesTo)
-		_ = store.AddEdge(ctx, l3ID, "subarea/dev/ios", domain.EdgeAppliesTo)
-		_ = store.AddEdge(ctx, l3ID, "project/marrow", domain.EdgeAppliesTo)
-
-		return nil
-	}
 }
 
 // Update implements tea.Model.
@@ -178,6 +110,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case tea.WindowSizeMsg:
+		m.Width = msg.Width
+		m.Height = msg.Height
+		return m, nil
 
 	case tickMsg:
 		return m, tea.Batch(m.tickCmd(), m.healthCheckCmd())
@@ -223,6 +160,44 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.Report != nil {
 			m.StatusMsg = fmt.Sprintf("Synced %d nodes, %d edges to Obsidian", msg.Report.NodesWritten, msg.Report.EdgesWritten)
 		}
+
+	case DomainTreeLoadedMsg:
+		if msg.Err != "" {
+			m.StatusMsg = msg.Err
+		} else {
+			m.DomainTree = msg.Tree
+			m.DomainTreeCursor = 0
+			m.StatusMsg = ""
+		}
+
+	case ProjectsLoadedMsg:
+		if msg.Err != "" {
+			m.StatusMsg = msg.Err
+		} else {
+			m.Projects = msg.Projects
+			m.ProjectCursor = 0
+			m.SelectedProject = nil
+			m.StatusMsg = ""
+		}
+
+	case SessionsLoadedMsg:
+		if msg.Err != "" {
+			m.StatusMsg = msg.Err
+		} else {
+			m.Sessions = msg.Sessions
+			m.SessionCursor = 0
+			m.SelectedSession = nil
+			m.StatusMsg = ""
+		}
+
+	case LearningsLoadedMsg:
+		if msg.Err != "" {
+			m.StatusMsg = msg.Err
+		} else {
+			m.Learnings = msg.Learnings
+			m.LearningCursor = 0
+			m.StatusMsg = ""
+		}
 	}
 
 	return m, nil
@@ -230,6 +205,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (m *Model) View() string {
+	sepLen := m.Width - 4
+	if sepLen < 20 {
+		sepLen = 20
+	}
+	sepLine := strings.Repeat("─", sepLen)
+
 	var b strings.Builder
 
 	b.WriteString(m.header())
@@ -323,26 +304,26 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "g":
 			if m.Screen != ScreenDomainTree {
 				m.setScreen(ScreenDomainTree)
-				m.loadDomainTree()
-				return m, nil
+				m.StatusMsg = "Loading taxonomy..."
+				return m, m.loadDomainTreeCmd()
 			}
 		case "p":
 			if m.Screen != ScreenProjects && m.Screen != ScreenProjectDetail {
 				m.setScreen(ScreenProjects)
-				m.loadProjects()
-				return m, nil
+				m.StatusMsg = "Loading projects..."
+				return m, m.loadProjectsCmd()
 			}
 		case "s":
 			if m.Screen != ScreenSessions && m.Screen != ScreenSessionDetail {
 				m.setScreen(ScreenSessions)
-				m.loadSessions()
-				return m, nil
+				m.StatusMsg = "Loading sessions..."
+				return m, m.loadSessionsCmd()
 			}
 		case "l":
 			if m.Screen != ScreenLearnings {
 				m.setScreen(ScreenLearnings)
-				m.loadLearnings()
-				return m, nil
+				m.StatusMsg = "Loading learnings..."
+				return m, m.loadLearningsCmd()
 			}
 		case "o":
 			if m.Screen == ScreenDashboard {
@@ -725,17 +706,17 @@ func (m *Model) handleDomainTreeKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) loadDomainTree() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func (m *Model) loadDomainTreeCmd() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	tree, err := m.Deps.GraphStore.GetDomainTree(ctx)
-	if err != nil {
-		m.StatusMsg = fmt.Sprintf("load taxonomy: %v", err)
-		return
+		tree, err := m.Deps.GraphStore.GetDomainTree(ctx)
+		if err != nil {
+			return DomainTreeLoadedMsg{Err: fmt.Sprintf("load taxonomy: %v", err)}
+		}
+		return DomainTreeLoadedMsg{Tree: tree}
 	}
-	m.DomainTree = tree
-	m.DomainTreeCursor = 0
 }
 
 // ── Projects ───────────────────────────────────────────────────────────────
@@ -754,37 +735,36 @@ func (m *Model) handleProjectsKey(msg tea.KeyMsg) tea.Cmd {
 		if len(m.Projects) > 0 && m.ProjectCursor < len(m.Projects) {
 			m.SelectedProject = &m.Projects[m.ProjectCursor]
 			m.setScreen(ScreenProjectDetail)
-			m.loadProjectSubareas()
+			m.ProjectSubareas = loadProjectSubareasSync(m.Deps.GraphStore, m.SelectedProject)
+			m.Cursor = 0
 		}
 	}
 	return nil
 }
 
-func (m *Model) loadProjects() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func (m *Model) loadProjectsCmd() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	projects, err := m.Deps.GraphStore.ListActiveProjects(ctx)
-	if err != nil {
-		m.StatusMsg = fmt.Sprintf("load projects: %v", err)
-		return
+		projects, err := m.Deps.GraphStore.ListActiveProjects(ctx)
+		if err != nil {
+			return ProjectsLoadedMsg{Err: fmt.Sprintf("load projects: %v", err)}
+		}
+		return ProjectsLoadedMsg{Projects: projects}
 	}
-	m.Projects = projects
-	m.ProjectCursor = 0
-	m.SelectedProject = nil
 }
 
-func (m *Model) loadProjectSubareas() {
-	if m.SelectedProject == nil {
-		return
+func loadProjectSubareasSync(gs domain.GraphStore, p *domain.Project) []domain.Subarea {
+	if p == nil {
+		return nil
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	subareas := make([]domain.Subarea, 0, len(m.SelectedProject.SubareaIDs))
-	for _, id := range m.SelectedProject.SubareaIDs {
-		node, err := m.Deps.GraphStore.GetNode(ctx, id)
+	subareas := make([]domain.Subarea, 0, len(p.SubareaIDs))
+	for _, id := range p.SubareaIDs {
+		node, err := gs.GetNode(ctx, id)
 		if err != nil {
 			continue
 		}
@@ -793,8 +773,28 @@ func (m *Model) loadProjectSubareas() {
 			Active: node.Active,
 		})
 	}
-	m.ProjectSubareas = subareas
-	m.Cursor = 0
+	return subareas
+}
+
+func loadSessionLearningsSync(gs domain.GraphStore, s *domain.Session) []domain.Learning {
+	if s == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	learnings, err := gs.ListLearnings(ctx, "")
+	if err != nil {
+		return nil
+	}
+
+	var filtered []domain.Learning
+	for _, l := range learnings {
+		if l.SessionID == s.ID {
+			filtered = append(filtered, l)
+		}
+	}
+	return filtered
 }
 
 // ── Project Detail ─────────────────────────────────────────────────────────
@@ -829,7 +829,8 @@ func (m *Model) handleSessionsKey(msg tea.KeyMsg) tea.Cmd {
 		if len(m.Sessions) > 0 && m.SessionCursor < len(m.Sessions) {
 			m.SelectedSession = &m.Sessions[m.SessionCursor]
 			m.setScreen(ScreenSessionDetail)
-			m.loadSessionLearnings()
+			m.SessionLearnings = loadSessionLearningsSync(m.Deps.GraphStore, m.SelectedSession)
+			m.Cursor = 0
 		}
 	}
 	return nil
@@ -849,64 +850,35 @@ func (m *Model) handleSessionDetailKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) loadSessions() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func (m *Model) loadSessionsCmd() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	// Load sessions from all projects
-	projects, err := m.Deps.GraphStore.ListActiveProjects(ctx)
-	if err != nil {
-		m.StatusMsg = fmt.Sprintf("load projects: %v", err)
-		return
-	}
-
-	var allSessions []domain.Session
-	for _, p := range projects {
-		// Use the project's engram ID — reconstruct from slug
-		projectNodes, err := m.Deps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+		projects, err := m.Deps.GraphStore.ListActiveProjects(ctx)
 		if err != nil {
-			continue
+			return SessionsLoadedMsg{Err: fmt.Sprintf("load projects: %v", err)}
 		}
-		for _, pn := range projectNodes {
-			if domain.Slugify(pn.Title) == p.Slug {
-				sessions, err := m.Deps.GraphStore.ListSessions(ctx, pn.EngramID)
-				if err == nil {
-					allSessions = append(allSessions, sessions...)
+
+		var allSessions []domain.Session
+		for _, p := range projects {
+			projectNodes, err := m.Deps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+			if err != nil {
+				continue
+			}
+			for _, pn := range projectNodes {
+				if domain.Slugify(pn.Title) == p.Slug {
+					sessions, err := m.Deps.GraphStore.ListSessions(ctx, pn.EngramID)
+					if err == nil {
+						allSessions = append(allSessions, sessions...)
+					}
+					break
 				}
-				break
 			}
 		}
+
+		return SessionsLoadedMsg{Sessions: allSessions}
 	}
-
-	m.Sessions = allSessions
-	m.SessionCursor = 0
-	m.SelectedSession = nil
-}
-
-func (m *Model) loadSessionLearnings() {
-	if m.SelectedSession == nil {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Find learnings linked to this session via learned_from edge
-	learnings, err := m.Deps.GraphStore.ListLearnings(ctx, "")
-	if err != nil {
-		m.StatusMsg = fmt.Sprintf("load learnings: %v", err)
-		return
-	}
-
-	var filtered []domain.Learning
-	for _, l := range learnings {
-		if l.SessionID == m.SelectedSession.ID {
-			filtered = append(filtered, l)
-		}
-	}
-
-	m.SessionLearnings = filtered
-	m.Cursor = 0
 }
 
 // ── Learnings ──────────────────────────────────────────────────────────────
@@ -925,25 +897,25 @@ func (m *Model) handleLearningsKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) loadLearnings() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func (m *Model) loadLearningsCmd() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	learnings, err := m.Deps.GraphStore.ListLearnings(ctx, "")
-	if err != nil {
-		m.StatusMsg = fmt.Sprintf("load learnings: %v", err)
-		return
+		learnings, err := m.Deps.GraphStore.ListLearnings(ctx, "")
+		if err != nil {
+			return LearningsLoadedMsg{Err: fmt.Sprintf("load learnings: %v", err)}
+		}
+
+		return LearningsLoadedMsg{Learnings: learnings}
 	}
-
-	m.Learnings = learnings
-	m.LearningCursor = 0
 }
 
 // ── Commands ───────────────────────────────────────────────────────────────
 
 func (m *Model) refreshResourcesCmd() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		positions, err := m.Deps.Store.GetAllTriagePositions(ctx)
@@ -957,9 +929,12 @@ func (m *Model) refreshResourcesCmd() tea.Cmd {
 				ID:     pos.ResourceID,
 				Bucket: pos.Bucket,
 			}
-			full, err := m.Deps.Engram.GetResource(ctx, pos.ResourceID)
-			if err == nil {
-				r = full
+			// Best-effort Engram lookup — skip if unavailable
+			if m.EngramOK {
+				full, err := m.Deps.Engram.GetResource(ctx, pos.ResourceID)
+				if err == nil {
+					r = full
+				}
 			}
 			resources = append(resources, r)
 		}
