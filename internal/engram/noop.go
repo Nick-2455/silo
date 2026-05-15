@@ -32,12 +32,16 @@ func (n *NoopClient) IsReachable(_ context.Context) bool {
 	return false
 }
 
-func (n *NoopClient) SaveNode(_ context.Context, _, _ string, _ map[string]any, _ string) (string, error) {
+func (n *NoopClient) SaveNode(_ context.Context, _, _ string, _ map[string]any, _, _ string) (string, error) {
 	return "", ErrEngramUnavailable
 }
 
 func (n *NoopClient) UpdateNode(_ context.Context, _ string, _ map[string]any) error {
 	return ErrEngramUnavailable
+}
+
+func (n *NoopClient) SearchByProject(_ context.Context, _ string) ([]domain.DiscoveredObservation, error) {
+	return nil, ErrEngramUnavailable
 }
 
 func (n *NoopClient) Close() error {

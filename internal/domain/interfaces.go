@@ -9,8 +9,9 @@ type EngramClient interface {
 	SearchResources(ctx context.Context, query string) ([]Resource, error)
 	UpdateResource(ctx context.Context, id string, updates map[string]any) error
 	IsReachable(ctx context.Context) bool
-	SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey string) (string, error)
+	SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error)
 	UpdateNode(ctx context.Context, engramID string, content map[string]any) error
+	SearchByProject(ctx context.Context, project string) ([]DiscoveredObservation, error)
 }
 
 // ResourceStore is the interface for local SQLite persistence.
@@ -63,6 +64,11 @@ type GraphStore interface {
 	// Close shares the Store's db; no-op
 	Close() error
 }
+
+// DefaultProject is the Engram project used for global Silo entities
+// (domains, subareas, resources, person). Project-specific nodes
+// (sessions, learnings) use their own project slug instead.
+const DefaultProject = "silo"
 
 // Config holds Silo configuration values.
 type Config struct {

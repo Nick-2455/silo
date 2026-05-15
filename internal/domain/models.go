@@ -170,6 +170,31 @@ type Person struct {
 	Active bool   `json:"active"`
 }
 
+// DiscoveredObservation represents an observation found in Engram
+// for a project that may not yet be tracked in Silo's graph.
+type DiscoveredObservation struct {
+	ID             string `json:"id"`
+	Type           string `json:"type"`
+	Title          string `json:"title"`
+	ContentPreview string `json:"content_preview,omitempty"`
+	SessionID     string `json:"session_id,omitempty"`
+	ImportableAs   string `json:"importable_as"` // "session", "learning", or "" (skip)
+	AlreadyImported bool  `json:"already_imported"`
+}
+
+// EngramTypeMap defines how Engram observation types map to Silo node types.
+// Types not in this map are skipped during import (resource, tool_use, etc.).
+var EngramTypeMap = map[string]string{
+	"session_summary": "session",
+	"architecture":    "learning",
+	"decision":        "learning",
+	"bugfix":          "learning",
+	"discovery":       "learning",
+	"pattern":         "learning",
+	"learning":        "learning",
+	"config":          "learning",
+}
+
 // Slugify generates a deterministic slug from a name.
 // Lowercase, spaces → hyphens, non-alphanumeric stripped.
 // "Backend Development" → "backend-development"

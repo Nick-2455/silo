@@ -80,12 +80,16 @@ func (m *mockEngramClient) IsReachable(ctx context.Context) bool {
 	return m.reachable
 }
 
-func (m *mockEngramClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey string) (string, error) {
+func (m *mockEngramClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error) {
 	return "test-node-id-123", nil
 }
 
 func (m *mockEngramClient) UpdateNode(ctx context.Context, engramID string, content map[string]any) error {
 	return nil
+}
+
+func (m *mockEngramClient) SearchByProject(ctx context.Context, project string) ([]domain.DiscoveredObservation, error) {
+	return nil, nil
 }
 
 func newTestDeps(t *testing.T) *app.Deps {

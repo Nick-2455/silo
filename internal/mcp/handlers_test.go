@@ -55,12 +55,16 @@ func (m *mockEngramClient) IsReachable(ctx context.Context) bool {
 	return true
 }
 
-func (m *mockEngramClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey string) (string, error) {
+func (m *mockEngramClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error) {
 	return "test-node-id", nil
 }
 
 func (m *mockEngramClient) UpdateNode(ctx context.Context, engramID string, content map[string]any) error {
 	return nil
+}
+
+func (m *mockEngramClient) SearchByProject(ctx context.Context, project string) ([]domain.DiscoveredObservation, error) {
+	return nil, nil
 }
 
 // mockStore is a test double for domain.ResourceStore.
@@ -523,3 +527,469 @@ func TestHandleTriage_RollbackOnEngramFailure(t *testing.T) {
 		t.Error("expected rollback to be called on Engram failure")
 	}
 }
+
+// TestProjectRouting verifies that each node type passes the correct Engram project.
+func TestProjectRouting_CreateDomain(t *testing.T) {
+	var gotProject string
+	handlerDeps = &Deps{
+		Engram: &trackingEngramClient{saveNodeFn: func(_ context.Context, _ string, _ string, _ map[string]any, _ string, project string) (string, error) {
+			gotProject = project
+			return "engram-1", nil
+		}},
+		GraphStore: &mockGraphStore{},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "Dev"}
+	_, _ = handleCreateDomain(context.Background(), req)
+
+	if gotProject != domain.DefaultProject {
+		t.Errorf("domain should use DefaultProject=%q, got %q", domain.DefaultProject, gotProject)
+	}
+}
+
+func TestProjectRouting_CreateSubarea(t *testing.T) {
+	var gotProject string
+	handlerDeps = &Deps{
+		Engram: &trackingEngramClient{saveNodeFn: func(_ context.Context, _ string, _ string, _ map[string]any, _ string, project string) (string, error) {
+			gotProject = project
+			return "engram-2", nil
+		}},
+		GraphStore: &mockGraphStore{
+			listNodesByTypeFn: func(_ context.Context, nt domain.NodeType) ([]domain.GraphNode, error) {
+				if nt == domain.NodeTypeDomain {
+					return []domain.GraphNode{{EngramID: "domain/dev", Title: "Dev", Active: true}}, nil
+				}
+				return nil, nil
+			},
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+			addEdgeFn:    func(_ context.Context, _, _ string, _ domain.EdgeLabel) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "Backend", "domain_slug": "dev"}
+	_, _ = handleCreateSubarea(context.Background(), req)
+
+	if gotProject != domain.DefaultProject {
+		t.Errorf("subarea should use DefaultProject=%q, got %q", domain.DefaultProject, gotProject)
+	}
+}
+
+func TestProjectRouting_CreateProject(t *testing.T) {
+	var gotProject string
+	handlerDeps = &Deps{
+		Engram: &trackingEngramClient{saveNodeFn: func(_ context.Context, _ string, _ string, _ map[string]any, _ string, project string) (string, error) {
+			gotProject = project
+			return "engram-3", nil
+		}},
+		GraphStore: &mockGraphStore{
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "cortex"}
+	_, _ = handleCreateProject(context.Background(), req)
+
+	if gotProject != "cortex" {
+		t.Errorf("project should use its own slug='cortex', got %q", gotProject)
+	}
+}
+
+func TestProjectRouting_CreateSession(t *testing.T) {
+	var gotProject string
+	handlerDeps = &Deps{
+		Engram: &trackingEngramClient{saveNodeFn: func(_ context.Context, _ string, _ string, _ map[string]any, _ string, project string) (string, error) {
+			gotProject = project
+			return "engram-4", nil
+		}},
+		GraphStore: &mockGraphStore{
+			listNodesByTypeFn: func(_ context.Context, nt domain.NodeType) ([]domain.GraphNode, error) {
+				if nt == domain.NodeTypeProject {
+					return []domain.GraphNode{{EngramID: "project/cortex", Title: "cortex", Active: true}}, nil
+				}
+				return nil, nil
+			},
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+			addEdgeFn:    func(_ context.Context, _, _ string, _ domain.EdgeLabel) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"project_slug": "cortex", "description": "build API"}
+	_, _ = handleCreateSession(context.Background(), req)
+
+	if gotProject != "cortex" {
+		t.Errorf("session should use parent project slug='cortex', got %q", gotProject)
+	}
+}
+
+func TestProjectRouting_CreateLearning_ResolvesProjectFromSession(t *testing.T) {
+	var gotProject string
+	handlerDeps = &Deps{
+		Engram: &trackingEngramClient{saveNodeFn: func(_ context.Context, _ string, _ string, _ map[string]any, _ string, project string) (string, error) {
+			gotProject = project
+			return "engram-5", nil
+		}},
+		GraphStore: &mockGraphStore{
+			listNodesByTypeFn: func(_ context.Context, nt domain.NodeType) ([]domain.GraphNode, error) {
+				if nt == domain.NodeTypeSession {
+					return []domain.GraphNode{{EngramID: "session-1", Title: "build API", Active: true}}, nil
+				}
+				return nil, nil
+			},
+			getNodeFn: func(_ context.Context, id string) (domain.GraphNode, error) {
+				if id == "project/cortex" {
+					return domain.GraphNode{EngramID: "project/cortex", Title: "cortex", Active: true}, nil
+				}
+				return domain.GraphNode{}, domain.ErrNodeNotFound
+			},
+			getEdgesFn: func(_ context.Context, nodeID, direction string) ([]domain.GraphEdge, error) {
+				if nodeID == "session-1" && direction == "to" {
+					return []domain.GraphEdge{{FromID: "project/cortex", ToID: "session-1", Label: domain.EdgeWorkedOn}}, nil
+				}
+				return nil, nil
+			},
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+			addEdgeFn:    func(_ context.Context, _, _ string, _ domain.EdgeLabel) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"session_slug": "build-api", "content": "learned something"}
+	_, _ = handleCreateLearning(context.Background(), req)
+
+	if gotProject != "cortex" {
+		t.Errorf("learning should resolve parent project='cortex' from session edge, got %q", gotProject)
+	}
+}
+
+func TestProjectRouting_CreateLearning_FallsBackToDefault(t *testing.T) {
+	var gotProject string
+	handlerDeps = &Deps{
+		Engram: &trackingEngramClient{saveNodeFn: func(_ context.Context, _ string, _ string, _ map[string]any, _ string, project string) (string, error) {
+			gotProject = project
+			return "engram-6", nil
+		}},
+		GraphStore: &mockGraphStore{
+			listNodesByTypeFn: func(_ context.Context, nt domain.NodeType) ([]domain.GraphNode, error) {
+				if nt == domain.NodeTypeSession {
+					return []domain.GraphNode{{EngramID: "session-1", Title: "orphan session", Active: true}}, nil
+				}
+				return nil, nil
+			},
+			getEdgesFn:    func(_ context.Context, _, _ string) ([]domain.GraphEdge, error) { return nil, nil },
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+			addEdgeFn:    func(_ context.Context, _, _ string, _ domain.EdgeLabel) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"session_slug": "orphan-session", "content": "orphan learning"}
+	_, _ = handleCreateLearning(context.Background(), req)
+
+	if gotProject != domain.DefaultProject {
+		t.Errorf("learning without parent project should fall back to DefaultProject=%q, got %q", domain.DefaultProject, gotProject)
+	}
+}
+
+// trackingEngramClient captures SaveNode calls for project routing assertions.
+type trackingEngramClient struct {
+	createResourceFn func(ctx context.Context, r domain.Resource) (string, error)
+	saveNodeFn       func(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error)
+}
+
+func (t *trackingEngramClient) CreateResource(ctx context.Context, r domain.Resource) (string, error) {
+	if t.createResourceFn != nil {
+		return t.createResourceFn(ctx, r)
+	}
+	return "", nil
+}
+func (t *trackingEngramClient) GetResource(_ context.Context, _ string) (domain.Resource, error) {
+	return domain.Resource{}, nil
+}
+func (t *trackingEngramClient) SearchResources(_ context.Context, _ string) ([]domain.Resource, error) {
+	return nil, nil
+}
+func (t *trackingEngramClient) UpdateResource(_ context.Context, _ string, _ map[string]any) error {
+	return nil
+}
+func (t *trackingEngramClient) IsReachable(_ context.Context) bool { return true }
+func (t *trackingEngramClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error) {
+	if t.saveNodeFn != nil {
+		return t.saveNodeFn(ctx, nodeType, title, content, topicKey, project)
+	}
+	return "test-node-id", nil
+}
+func (t *trackingEngramClient) UpdateNode(_ context.Context, _ string, _ map[string]any) error { return nil }
+func (t *trackingEngramClient) SearchByProject(_ context.Context, _ string) ([]domain.DiscoveredObservation, error) {
+	return nil, nil
+}
+func (t *trackingEngramClient) Close() error { return nil }
+
+// TestDiscoverProject verifies discover_project returns Engram observations by project.
+func TestDiscoverProject(t *testing.T) {
+	handlerDeps = &Deps{
+		Engram: &searchByProjectMock{
+			observations: []domain.DiscoveredObservation{
+				{ID: "1", Type: "architecture", Title: "Cortex architecture", ImportableAs: "learning"},
+				{ID: "2", Type: "decision", Title: "Use Bubble Tea", ImportableAs: "learning"},
+				{ID: "3", Type: "bugfix", Title: "Fix search parsing", ImportableAs: "learning"},
+				{ID: "4", Type: "architecture", Title: "MCP client design", ImportableAs: "learning"},
+				{ID: "5", Type: "session_summary", Title: "Build session", ImportableAs: "session"},
+				{ID: "6", Type: "tool_use", Title: "Ran go test", ImportableAs: ""},
+			},
+		},
+		GraphStore: &mockGraphStore{},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "cortex"}
+
+	result, err := handleDiscoverProject(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &data); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if data["project"] != "cortex" {
+		t.Errorf("expected project=cortex, got %v", data["project"])
+	}
+
+	totalCount, ok := data["total_found"].(float64)
+	if !ok || int(totalCount) != 6 {
+		t.Errorf("expected total_found=6, got %v", data["total_found"])
+	}
+
+	importableCount, ok := data["importable"].(float64)
+	if !ok || int(importableCount) != 5 {
+		t.Errorf("expected importable=5, got %v", data["importable"])
+	}
+
+	skippedCount, ok := data["skipped"].(float64)
+	if !ok || int(skippedCount) != 1 {
+		t.Errorf("expected skipped=1, got %v", data["skipped"])
+	}
+}
+
+func TestImportProject_ProjectNotFound(t *testing.T) {
+	handlerDeps = &Deps{
+		Engram:      &searchByProjectMock{},
+		GraphStore:  &mockGraphStore{},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "nonexistent"}
+
+	result, err := handleImportProject(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	text := result.Content[0].(mcp.TextContent).Text
+	if text == "" {
+		t.Fatal("expected error message for missing project")
+	}
+}
+
+func TestImportProject_MarksAlreadyImported(t *testing.T) {
+	handlerDeps = &Deps{
+		Engram: &searchByProjectMock{
+			observations: []domain.DiscoveredObservation{
+				{ID: "1", Type: "architecture", Title: "Already imported", ImportableAs: "learning"},
+				{ID: "2", Type: "decision", Title: "New decision", ImportableAs: "learning"},
+			},
+		},
+		GraphStore: &mockGraphStore{
+			listNodesByTypeFn: func(_ context.Context, nt domain.NodeType) ([]domain.GraphNode, error) {
+				if nt == domain.NodeTypeProject {
+					return []domain.GraphNode{
+						{EngramID: "project/cortex", Title: "cortex", Active: true},
+					}, nil
+				}
+				return nil, nil
+			},
+			getNodeFn: func(_ context.Context, id string) (domain.GraphNode, error) {
+				if id == "1" {
+					return domain.GraphNode{EngramID: "1", Title: "Already imported", NodeType: domain.NodeTypeLearning}, nil
+				}
+				return domain.GraphNode{}, domain.ErrNodeNotFound
+			},
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+			addEdgeFn:    func(_ context.Context, _, _ string, _ domain.EdgeLabel) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "cortex"}
+
+	result, err := handleImportProject(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &data); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if data["project"] != "cortex" {
+		t.Errorf("expected project=cortex, got %v", data["project"])
+	}
+
+	alreadyCount, ok := data["already_imported"].(float64)
+	if !ok || int(alreadyCount) != 1 {
+		t.Errorf("expected already_imported=1, got %v", data["already_imported"])
+	}
+
+	importedLearnings, ok := data["imported_learnings"].(float64)
+	if !ok || int(importedLearnings) != 1 {
+		t.Errorf("expected imported_learnings=1, got %v", data["imported_learnings"])
+	}
+}
+
+func TestImportProject_AutoImportSession(t *testing.T) {
+	handlerDeps = &Deps{
+		Engram: &searchByProjectMock{
+			observations: []domain.DiscoveredObservation{
+				{ID: "77", Type: "session_summary", Title: "Session summary: blacksight", ImportableAs: "session"},
+			},
+			saveNodeFn: func(_ context.Context, _, _ string, _ map[string]any, _, _ string) (string, error) {
+				return "77", nil
+			},
+		},
+		GraphStore: &mockGraphStore{
+			listNodesByTypeFn: func(_ context.Context, nt domain.NodeType) ([]domain.GraphNode, error) {
+				if nt == domain.NodeTypeProject {
+					return []domain.GraphNode{
+						{EngramID: "project/blacksight", Title: "blacksight", Active: true},
+					}, nil
+				}
+				return nil, nil
+			},
+			getNodeFn:    func(_ context.Context, _ string) (domain.GraphNode, error) { return domain.GraphNode{}, domain.ErrNodeNotFound },
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+			addEdgeFn:    func(_ context.Context, _, _ string, _ domain.EdgeLabel) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "blacksight"}
+
+	result, err := handleImportProject(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &data); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if data["project"] != "blacksight" {
+		t.Errorf("expected project=blacksight, got %v", data["project"])
+	}
+
+	importedSessions, ok := data["imported_sessions"].(float64)
+	if !ok || int(importedSessions) != 1 {
+		t.Errorf("expected imported_sessions=1, got %v", data["imported_sessions"])
+	}
+}
+
+func TestImportProject_ReusesEngramID(t *testing.T) {
+	saveNodeCalled := false
+	handlerDeps = &Deps{
+		Engram: &searchByProjectMock{
+			observations: []domain.DiscoveredObservation{
+				{ID: "68", Type: "architecture", Title: "SDD init: blacksight", ImportableAs: "learning"},
+				{ID: "77", Type: "session_summary", Title: "Session summary: blacksight", ImportableAs: "session"},
+				{ID: "99", Type: "discovery", Title: "New discovery", ImportableAs: "learning"},
+			},
+			saveNodeFn: func(_ context.Context, nodeType, title string, _ map[string]any, _, _ string) (string, error) {
+				saveNodeCalled = true
+				t.Errorf("SaveNode should NOT be called when observation already has an Engram ID, but was called for %q", title)
+				return "unexpected", nil
+			},
+		},
+		GraphStore: &mockGraphStore{
+			listNodesByTypeFn: func(_ context.Context, nt domain.NodeType) ([]domain.GraphNode, error) {
+				if nt == domain.NodeTypeProject {
+					return []domain.GraphNode{
+						{EngramID: "project/blacksight", Title: "blacksight", Active: true},
+					}, nil
+				}
+				return nil, nil
+			},
+			getNodeFn:    func(_ context.Context, _ string) (domain.GraphNode, error) { return domain.GraphNode{}, domain.ErrNodeNotFound },
+			upsertNodeFn: func(_ context.Context, _ domain.GraphNode) error { return nil },
+			addEdgeFn:    func(_ context.Context, _, _ string, _ domain.EdgeLabel) error { return nil },
+		},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"name": "blacksight"}
+
+	result, err := handleImportProject(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if saveNodeCalled {
+		t.Error("SaveNode should not have been called for observations with existing Engram IDs")
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &data); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	importedSessions, ok := data["imported_sessions"].(float64)
+	if !ok || int(importedSessions) != 1 {
+		t.Errorf("expected imported_sessions=1, got %v", data["imported_sessions"])
+	}
+	importedLearnings, ok := data["imported_learnings"].(float64)
+	if !ok || int(importedLearnings) != 2 {
+		t.Errorf("expected imported_learnings=2, got %v", data["imported_learnings"])
+	}
+	errors, ok := data["errors"].(float64)
+	if !ok || int(errors) != 0 {
+		t.Errorf("expected errors=0, got %v", data["errors"])
+	}
+}
+
+type searchByProjectMock struct {
+	observations []domain.DiscoveredObservation
+	err          error
+	saveNodeFn   func(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error)
+}
+
+func (s *searchByProjectMock) CreateResource(_ context.Context, _ domain.Resource) (string, error) {
+	return "1", nil
+}
+func (s *searchByProjectMock) GetResource(_ context.Context, _ string) (domain.Resource, error) {
+	return domain.Resource{}, nil
+}
+func (s *searchByProjectMock) SearchResources(_ context.Context, _ string) ([]domain.Resource, error) {
+	return nil, nil
+}
+func (s *searchByProjectMock) UpdateResource(_ context.Context, _ string, _ map[string]any) error { return nil }
+func (s *searchByProjectMock) IsReachable(_ context.Context) bool                                   { return true }
+func (s *searchByProjectMock) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error) {
+	if s.saveNodeFn != nil {
+		return s.saveNodeFn(ctx, nodeType, title, content, topicKey, project)
+	}
+	return "1", nil
+}
+func (s *searchByProjectMock) UpdateNode(_ context.Context, _ string, _ map[string]any) error { return nil }
+func (s *searchByProjectMock) SearchByProject(_ context.Context, project string) ([]domain.DiscoveredObservation, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.observations, nil
+}
+func (s *searchByProjectMock) Close() error { return nil }

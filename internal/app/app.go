@@ -170,7 +170,7 @@ func ensureDefaultPerson(ctx context.Context, deps *Deps) error {
 		_, _ = deps.Engram.SaveNode(ctx, string(domain.NodeTypePerson), "Nico", map[string]any{
 			"name":   "Nico",
 			"active": true,
-		}, "person/default")
+		}, "person/default", domain.DefaultProject)
 	}
 
 	return nil

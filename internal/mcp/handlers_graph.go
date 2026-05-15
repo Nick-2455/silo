@@ -114,7 +114,7 @@ func handleCreateDomain(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 		"slug":        slug,
 		"description": description,
 		"active":      true,
-	}, "domain/"+slug)
+	}, "domain/"+slug, domain.DefaultProject)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create domain in Engram: %v", err)), nil
 	}
@@ -179,7 +179,7 @@ func handleCreateSubarea(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 		"slug":      slug,
 		"domain_id": domainNode.EngramID,
 		"active":    true,
-	}, topicKey)
+	}, topicKey, domain.DefaultProject)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create subarea in Engram: %v", err)), nil
 	}
@@ -232,7 +232,7 @@ func handleCreateProject(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 		"slug":        slug,
 		"description": description,
 		"active":      true,
-	}, "project/"+slug)
+	}, "project/"+slug, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create project in Engram: %v", err)), nil
 	}
@@ -417,7 +417,7 @@ func handleCreateSession(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 		"description": description,
 		"project_id":  projectID,
 		"active":      true,
-	}, "session/"+slug)
+	}, "session/"+slug, projectSlug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create session in Engram: %v", err)), nil
 	}
@@ -488,12 +488,31 @@ func handleCreateLearning(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 	}
 	learningID := "learning/" + slug
 
+	// Resolve the project slug for the session's parent project.
+	// A learning should be stored under the same Engram project as its session.
+	var learningProjectSlug string
+	workedOnEdges, err := handlerDeps.GraphStore.GetEdges(ctx, sessionID, "to")
+	if err == nil {
+		for _, e := range workedOnEdges {
+			if e.Label == domain.EdgeWorkedOn {
+				projNode, nErr := handlerDeps.GraphStore.GetNode(ctx, e.FromID)
+				if nErr == nil {
+					learningProjectSlug = domain.Slugify(projNode.Title)
+					break
+				}
+			}
+		}
+	}
+	if learningProjectSlug == "" {
+		learningProjectSlug = domain.DefaultProject
+	}
+
 	// Create in Engram first
 	engramID, err := handlerDeps.Engram.SaveNode(ctx, string(domain.NodeTypeLearning), content[:min(len(content), 80)], map[string]any{
 		"content":     content,
 		"session_id":  sessionID,
 		"active":      true,
-	}, "learning/"+slug)
+	}, "learning/"+slug, learningProjectSlug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create learning in Engram: %v", err)), nil
 	}
@@ -814,4 +833,300 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// handleDiscoverProject searches Engram for pre-existing observations under a project.
+// This lets users see what Engram already knows before connecting to Silo.
+func handleDiscoverProject(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name, err := req.RequireString("name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	slug := domain.Slugify(name)
+	if slug == "" {
+		return mcp.NewToolResultError("invalid project name: must contain alphanumeric characters"), nil
+	}
+
+	observations, err := handlerDeps.Engram.SearchByProject(ctx, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to search Engram for project %q: %v", slug, err)), nil
+	}
+
+	type obsOut struct {
+		ID             string `json:"id"`
+		Type           string `json:"type"`
+		Title          string `json:"title"`
+		ContentPreview string `json:"content_preview,omitempty"`
+		SessionID     string `json:"session_id,omitempty"`
+		ImportableAs   string `json:"importable_as"`
+	}
+
+	result := make([]obsOut, 0, len(observations))
+	for _, o := range observations {
+		result = append(result, obsOut{
+			ID:             o.ID,
+			Type:           o.Type,
+			Title:          o.Title,
+			ContentPreview: o.ContentPreview,
+			SessionID:     o.SessionID,
+			ImportableAs:   o.ImportableAs,
+		})
+	}
+
+	type typeCount struct {
+		Type  string `json:"type"`
+		Count int    `json:"count"`
+	}
+
+	counts := make(map[string]int)
+	for _, o := range observations {
+		counts[o.Type]++
+	}
+	summary := make([]typeCount, 0, len(counts))
+	for t, c := range counts {
+		summary = append(summary, typeCount{Type: t, Count: c})
+	}
+
+	importableCount := 0
+	skippedCount := 0
+	for _, o := range observations {
+		if o.ImportableAs != "" {
+			importableCount++
+		} else {
+			skippedCount++
+		}
+	}
+
+	response := map[string]any{
+		"project":      slug,
+		"total_found":  len(observations),
+		"importable":   importableCount,
+		"skipped":      skippedCount,
+		"summary":      summary,
+		"observations": result,
+	}
+
+	data, _ := json.Marshal(response)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// handleImportProject discovers Engram observations for an existing project
+// and auto-imports them as Silo graph nodes (sessions and learnings).
+func handleImportProject(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name, err := req.RequireString("name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	slug := domain.Slugify(name)
+	if slug == "" {
+		return mcp.NewToolResultError("invalid project name: must contain alphanumeric characters"), nil
+	}
+
+	// Verify project exists in local graph
+	projects, err := handlerDeps.GraphStore.ListNodesByType(ctx, domain.NodeTypeProject)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to load projects: %v", err)), nil
+	}
+
+	var projectNode *domain.GraphNode
+	for i := range projects {
+		if domain.Slugify(projects[i].Title) == slug {
+			projectNode = &projects[i]
+			break
+		}
+	}
+	if projectNode == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project %q not found — create it first with create_project", slug)), nil
+	}
+
+	// Search Engram for all observations under this project
+	observations, err := handlerDeps.Engram.SearchByProject(ctx, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to search Engram for project %q: %v", slug, err)), nil
+	}
+
+	type importResult struct {
+		ID             string `json:"id"`
+		Type           string `json:"type"`
+		Title          string `json:"title"`
+		ImportableAs   string `json:"importable_as"`
+		Imported       bool   `json:"imported"`
+		SiloNodeType   string `json:"silo_node_type,omitempty"`
+		SiloNodeID     string `json:"silo_node_id,omitempty"`
+		Skipped        bool   `json:"skipped"`
+		SkipReason     string `json:"skip_reason,omitempty"`
+	}
+
+	results := make([]importResult, 0, len(observations))
+	importedSessions := 0
+	importedLearnings := 0
+	alreadyImportedCount := 0
+	skippedCount := 0
+	errors := 0
+
+	// Track imported sessions by their Engram session_id for linking learnings
+	sessionByEngramID := make(map[string]string) // engram obs ID -> silo node engram_id
+
+	for _, o := range observations {
+		r := importResult{
+			ID:           o.ID,
+			Type:         o.Type,
+			Title:        o.Title,
+			ImportableAs: o.ImportableAs,
+		}
+
+		// Skip non-importable types
+		if o.ImportableAs == "" {
+			r.Skipped = true
+			r.SkipReason = "type not mapped"
+			skippedCount++
+			results = append(results, r)
+			continue
+		}
+
+		// Check if already imported
+		if o.ID != "" {
+			existing, err := handlerDeps.GraphStore.GetNode(ctx, o.ID)
+			if err == nil && existing.EngramID != "" {
+				r.Imported = true
+				r.SiloNodeID = existing.EngramID
+				r.SiloNodeType = string(existing.NodeType)
+				alreadyImportedCount++
+				// Track sessions even if already imported
+				if existing.NodeType == domain.NodeTypeSession {
+					sessionByEngramID[o.ID] = existing.EngramID
+				}
+				results = append(results, r)
+				continue
+			}
+		}
+
+		// Import as Silo node
+		// When the observation already has an Engram ID, reuse it directly
+		// instead of creating a duplicate via SaveNode (which may fail due to
+		// project mapping when the import runs from a different repo context).
+		switch o.ImportableAs {
+		case "session":
+			siloID := o.ID
+			if siloID == "" {
+				nodeSlug := domain.Slugify(o.Title)
+				if nodeSlug == "" {
+					nodeSlug = "session"
+				}
+				topicKey := "session/" + nodeSlug
+
+				var err error
+				siloID, err = handlerDeps.Engram.SaveNode(ctx, string(domain.NodeTypeSession), o.Title, map[string]any{
+					"description": o.Title,
+					"active":      true,
+				}, topicKey, slug)
+				if err != nil {
+					r.Skipped = true
+					r.SkipReason = fmt.Sprintf("failed to save to Engram: %v", err)
+					errors++
+					results = append(results, r)
+					continue
+				}
+			}
+
+			if err := handlerDeps.GraphStore.UpsertNode(ctx, domain.GraphNode{
+				EngramID: siloID,
+				NodeType: domain.NodeTypeSession,
+				Title:    o.Title,
+				Active:   true,
+			}); err != nil {
+				r.Skipped = true
+				r.SkipReason = fmt.Sprintf("failed to cache in SQLite: %v", err)
+				errors++
+				results = append(results, r)
+				continue
+			}
+
+			// Link session to project
+			_ = handlerDeps.GraphStore.AddEdge(ctx, projectNode.EngramID, siloID, domain.EdgeWorkedOn)
+
+			r.Imported = true
+			r.SiloNodeType = "session"
+			r.SiloNodeID = siloID
+			sessionByEngramID[o.ID] = siloID
+			importedSessions++
+
+		case "learning":
+			siloID := o.ID
+			if siloID == "" {
+				nodeSlug := domain.Slugify(o.Title)
+				if nodeSlug == "" {
+					nodeSlug = "learning"
+				}
+				if len(nodeSlug) > 40 {
+					nodeSlug = nodeSlug[:40]
+				}
+				topicKey := "learning/" + nodeSlug
+
+				content := map[string]any{
+					"content": o.Title,
+					"active":  true,
+				}
+				if o.ContentPreview != "" {
+					content["content"] = o.ContentPreview
+				}
+
+				var err error
+				siloID, err = handlerDeps.Engram.SaveNode(ctx, string(domain.NodeTypeLearning), o.Title, content, topicKey, slug)
+				if err != nil {
+					r.Skipped = true
+					r.SkipReason = fmt.Sprintf("failed to save to Engram: %v", err)
+					errors++
+					results = append(results, r)
+					continue
+				}
+			}
+
+			if err := handlerDeps.GraphStore.UpsertNode(ctx, domain.GraphNode{
+				EngramID: siloID,
+				NodeType: domain.NodeTypeLearning,
+				Title:    o.Title,
+				Active:   true,
+			}); err != nil {
+				r.Skipped = true
+				r.SkipReason = fmt.Sprintf("failed to cache in SQLite: %v", err)
+				errors++
+				results = append(results, r)
+				continue
+			}
+
+			// Link learning to session if session_id is available
+			if o.SessionID != "" {
+				if sessionNodeID, ok := sessionByEngramID[o.SessionID]; ok {
+					_ = handlerDeps.GraphStore.AddEdge(ctx, siloID, sessionNodeID, domain.EdgeLearnedFrom)
+				}
+			}
+
+			// Link learning to project
+			_ = handlerDeps.GraphStore.AddEdge(ctx, siloID, projectNode.EngramID, domain.EdgeAppliesTo)
+
+			r.Imported = true
+			r.SiloNodeType = "learning"
+			r.SiloNodeID = siloID
+			importedLearnings++
+		}
+
+		results = append(results, r)
+	}
+
+	response := map[string]any{
+		"project":            slug,
+		"total_found":        len(observations),
+		"imported_sessions":  importedSessions,
+		"imported_learnings": importedLearnings,
+		"already_imported":   alreadyImportedCount,
+		"skipped":            skippedCount,
+		"errors":             errors,
+		"observations":       results,
+	}
+
+	data, _ := json.Marshal(response)
+	return mcp.NewToolResultText(string(data)), nil
 }

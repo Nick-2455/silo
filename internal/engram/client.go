@@ -79,7 +79,7 @@ func (c *MCPClient) CreateResource(ctx context.Context, r domain.Resource) (stri
 		"title":   r.Title,
 		"content": string(contentBytes),
 		"type":    "resource",
-		"project": "silo",
+		"project": domain.DefaultProject,
 	})
 	if err != nil {
 		return "", err
@@ -110,7 +110,7 @@ func (c *MCPClient) GetResource(ctx context.Context, id string) (domain.Resource
 func (c *MCPClient) SearchResources(ctx context.Context, query string) ([]domain.Resource, error) {
 	result, err := c.callTool(ctx, "mem_search", map[string]any{
 		"query":   query,
-		"project": "silo",
+		"project": domain.DefaultProject,
 		"type":    "resource",
 		"limit":   50,
 	})
@@ -123,7 +123,7 @@ func (c *MCPClient) SearchResources(ctx context.Context, query string) ([]domain
 
 // SaveNode creates or updates a node in Engram with type and topic_key.
 // Returns the Engram observation ID.
-func (c *MCPClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey string) (string, error) {
+func (c *MCPClient) SaveNode(ctx context.Context, nodeType, title string, content map[string]any, topicKey, project string) (string, error) {
 	contentBytes, err := json.Marshal(content)
 	if err != nil {
 		return "", fmt.Errorf("engram: marshal node content: %w", err)
@@ -134,7 +134,7 @@ func (c *MCPClient) SaveNode(ctx context.Context, nodeType, title string, conten
 		"content":   string(contentBytes),
 		"type":      nodeType,
 		"topic_key": topicKey,
-		"project":   "silo",
+		"project":   project,
 	})
 	if err != nil {
 		return "", err
@@ -168,7 +168,7 @@ func (c *MCPClient) UpdateNode(ctx context.Context, engramID string, content map
 func (c *MCPClient) SearchNodes(ctx context.Context, query, nodeType string) ([]domain.GraphNode, error) {
 	args := map[string]any{
 		"query":   query,
-		"project": "silo",
+		"project": domain.DefaultProject,
 		"limit":   50,
 	}
 	if nodeType != "" {
@@ -181,6 +181,23 @@ func (c *MCPClient) SearchNodes(ctx context.Context, query, nodeType string) ([]
 	}
 
 	return parseGraphNodeResults(extractText(result))
+}
+
+// SearchByProject searches Engram for all observations under a given project.
+// Used to discover pre-existing data for projects that may already exist in Engram.
+func (c *MCPClient) SearchByProject(ctx context.Context, project string) ([]domain.DiscoveredObservation, error) {
+	args := map[string]any{
+		"query":   project,
+		"project": project,
+		"limit":   50,
+	}
+
+	result, err := c.callTool(ctx, "mem_search", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseDiscoveredObservations(extractText(result))
 }
 
 // UpdateResource updates fields of an existing resource via mem_update.
@@ -527,4 +544,111 @@ func parseGraphNodeResults(text string) ([]domain.GraphNode, error) {
 	}
 
 	return nodes, nil
+}
+
+// parseDiscoveredObservations parses mem_search results into []DiscoveredObservation.
+func parseDiscoveredObservations(text string) ([]domain.DiscoveredObservation, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return []domain.DiscoveredObservation{}, nil
+	}
+
+	var wrapper struct {
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(text), &wrapper); err != nil {
+		return nil, fmt.Errorf("engram: parse discover wrapper: %w", err)
+	}
+
+	if wrapper.Result == "" {
+		return []domain.DiscoveredObservation{}, nil
+	}
+
+	var obs []domain.DiscoveredObservation
+	blocks := strings.Split(wrapper.Result, "\n\n")
+	for _, block := range blocks {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			continue
+		}
+
+		lines := strings.Split(block, "\n")
+		if len(lines) == 0 {
+			continue
+		}
+
+		var o domain.DiscoveredObservation
+		header := lines[0]
+
+		if idx := strings.Index(header, "#"); idx >= 0 {
+			rest := header[idx+1:]
+			if space := strings.IndexAny(rest, " \t("); space > 0 {
+				o.ID = rest[:space]
+			}
+		}
+
+		if start := strings.Index(header, "("); start >= 0 {
+			end := strings.Index(header[start:], ")")
+			if end > 0 {
+				o.Type = header[start+1 : start+end]
+			}
+		}
+
+		if idx := strings.Index(header, "\u2014"); idx >= 0 {
+			o.Title = strings.TrimSpace(header[idx+len("\u2014"):])
+		} else if idx := strings.Index(header, "--"); idx >= 0 {
+			o.Title = strings.TrimSpace(header[idx+2:])
+		}
+
+		// Extract session_id and content preview from JSON body
+		sid, preview := parseContentFields(block)
+		o.SessionID = sid
+		o.ContentPreview = preview
+		o.ImportableAs = domain.EngramTypeMap[o.Type]
+
+		if o.ID != "" || o.Title != "" {
+			obs = append(obs, o)
+		}
+	}
+
+	return obs, nil
+}
+
+// parseContentFields extracts session_id and content preview from JSON body lines.
+func parseContentFields(block string) (sessionID, contentPreview string) {
+	lines := strings.Split(block, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var fields map[string]any
+		if err := json.Unmarshal([]byte(line), &fields); err != nil {
+			continue
+		}
+		if sid, ok := fields["session_id"].(string); ok && sid != "" {
+			sessionID = sid
+		}
+		if content, ok := fields["content"].(string); ok && content != "" {
+			if len(content) > 200 {
+				contentPreview = content[:197] + "..."
+			} else {
+				contentPreview = content
+			}
+		}
+		// If no content field, look for other text fields for preview
+		if contentPreview == "" {
+			for _, key := range []string{"What", "Why", "description", "title"} {
+				if val, ok := fields[key].(string); ok && val != "" {
+					if len(val) > 200 {
+						contentPreview = val[:197] + "..."
+					} else {
+						contentPreview = val
+					}
+					break
+				}
+			}
+		}
+	}
+	return sessionID, contentPreview
 }

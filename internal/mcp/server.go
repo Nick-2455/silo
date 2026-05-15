@@ -32,6 +32,10 @@ func NewServer() *server.MCPServer {
 	s.AddTool(createProjectTool(), handleCreateProject)
 	s.AddTool(linkProjectTool(), handleLinkProject)
 	s.AddTool(toggleProjectTool(), handleToggleProject)
+	s.AddTool(discoverProjectTool(), handleDiscoverProject)
+
+	s.AddTool(discoverProjectTool(), handleDiscoverProject)
+	s.AddTool(importProjectTool(), handleImportProject)
 
 	// Session and Learning tools
 	s.AddTool(createSessionTool(), handleCreateSession)
@@ -168,6 +172,26 @@ func toggleProjectTool() mcp.Tool {
 		mcp.WithString("project_slug",
 			mcp.Required(),
 			mcp.Description("Slug of the project to toggle"),
+		),
+	)
+}
+
+func discoverProjectTool() mcp.Tool {
+	return mcp.NewTool("discover_project",
+		mcp.WithDescription("Search Engram for pre-existing observations under a project. Use this to see what Engram already knows before connecting to Silo."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the project to discover (e.g. 'cortex', 'blacksight')"),
+		),
+	)
+}
+
+func importProjectTool() mcp.Tool {
+	return mcp.NewTool("import_project",
+		mcp.WithDescription("Discover Engram observations for an existing project and auto-import them as Silo graph nodes. Maps session_summary → session, architecture/decision/bugfix/discovery/pattern/learning/config → learning. Skips operational types. Idempotent — already-imported nodes are skipped."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the existing Silo project to import observations for"),
 		),
 	)
 }
