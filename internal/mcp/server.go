@@ -225,9 +225,11 @@ func createLearningTool() mcp.Tool {
 		),
 		mcp.WithArray("subarea_slugs",
 			mcp.Description("List of subarea slugs to tag this learning with"),
+			mcp.WithStringItems(),
 		),
 		mcp.WithArray("project_slugs",
 			mcp.Description("List of project slugs to tag this learning with"),
+			mcp.WithStringItems(),
 		),
 	)
 }
