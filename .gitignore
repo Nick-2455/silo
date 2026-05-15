@@ -1,0 +1,11 @@
+# Binary
+silo
+
+# SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store

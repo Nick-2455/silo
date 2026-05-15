@@ -1,0 +1,25 @@
+# OpenSpec configuration for SDD (Spec-Driven Development)
+# Project: silo
+
+project:
+  name: silo
+  stack:
+    language: go
+    build: "go build ./cmd/silo"
+    test: "go test ./..."
+  notes:
+    - "Engram is the source of truth; some integration tests may require Engram installed and in PATH."
+
+sdd:
+  execution_mode: auto
+  artifact_store: openspec
+  pr_strategy: auto-forecast
+  review_budget_lines: 400
+
+rules:
+  # When strict_tdd is true, apply/verify phases must follow RED→GREEN→TRIANGULATE→REFACTOR and capture evidence.
+  apply:
+    strict_tdd: false
+    test_command: "go test ./..."
+  verify:
+    test_command: "go test ./..."

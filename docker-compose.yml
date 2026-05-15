@@ -1,0 +1,14 @@
+services:
+  silo:
+    build: .
+    stdin_open: true
+    tty: true
+    environment:
+      - TERM=xterm-256color
+    volumes:
+      - silo_data:/root/.local/share/silo
+      - silo_config:/root/.config/silo
+
+volumes:
+  silo_data:
+  silo_config:
