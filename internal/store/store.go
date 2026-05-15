@@ -30,6 +30,13 @@ func Open(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("store: ping sqlite: %w", err)
 	}
 
+	// Ensure busy timeout is actually set (some drivers ignore DSN pragma formats).
+	// This reduces SQLITE_BUSY under concurrent TUI/server usage.
+	if _, err := db.Exec("PRAGMA busy_timeout = 15000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("store: set busy_timeout: %w", err)
+	}
+
 	return &Store{db: db}, nil
 }
 

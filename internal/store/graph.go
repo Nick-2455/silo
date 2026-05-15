@@ -13,12 +13,12 @@ import (
 var _ domain.GraphStore = (*Store)(nil)
 
 // UpsertNode inserts or replaces a graph node in SQLite.
-func (s *Store) UpsertNode(_ context.Context, node domain.GraphNode) error {
+func (s *Store) UpsertNode(ctx context.Context, node domain.GraphNode) error {
 	active := 0
 	if node.Active {
 		active = 1
 	}
-	_, err := s.db.Exec(
+	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO graph_nodes (engram_id, node_type, title, active, cached_at)
 		 VALUES (?, ?, ?, ?, datetime('now'))
 		 ON CONFLICT(engram_id) DO UPDATE SET
@@ -35,8 +35,8 @@ func (s *Store) UpsertNode(_ context.Context, node domain.GraphNode) error {
 }
 
 // DeleteNode soft-deletes a node by setting active=0.
-func (s *Store) DeleteNode(_ context.Context, engramID string) error {
-	result, err := s.db.Exec(
+func (s *Store) DeleteNode(ctx context.Context, engramID string) error {
+	result, err := s.db.ExecContext(ctx,
 		`UPDATE graph_nodes SET active = 0 WHERE engram_id = ? AND active = 1`,
 		engramID,
 	)
@@ -54,12 +54,12 @@ func (s *Store) DeleteNode(_ context.Context, engramID string) error {
 }
 
 // GetNode retrieves a single graph node by Engram ID.
-func (s *Store) GetNode(_ context.Context, engramID string) (domain.GraphNode, error) {
+func (s *Store) GetNode(ctx context.Context, engramID string) (domain.GraphNode, error) {
 	var node domain.GraphNode
 	var active int64
 	var cachedAt string
 
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT engram_id, node_type, title, active, cached_at FROM graph_nodes WHERE engram_id = ?`,
 		engramID,
 	).Scan(&node.EngramID, &node.NodeType, &node.Title, &active, &cachedAt)
@@ -77,8 +77,8 @@ func (s *Store) GetNode(_ context.Context, engramID string) (domain.GraphNode, e
 }
 
 // ListNodesByType returns all nodes of a given type.
-func (s *Store) ListNodesByType(_ context.Context, nodeType domain.NodeType) ([]domain.GraphNode, error) {
-	rows, err := s.db.Query(
+func (s *Store) ListNodesByType(ctx context.Context, nodeType domain.NodeType) ([]domain.GraphNode, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT engram_id, node_type, title, active, cached_at FROM graph_nodes WHERE node_type = ? ORDER BY title`,
 		nodeType,
 	)
@@ -91,8 +91,8 @@ func (s *Store) ListNodesByType(_ context.Context, nodeType domain.NodeType) ([]
 }
 
 // AddEdge inserts a directed labeled edge. Returns ErrDuplicateNode if the edge already exists.
-func (s *Store) AddEdge(_ context.Context, fromID, toID string, label domain.EdgeLabel) error {
-	_, err := s.db.Exec(
+func (s *Store) AddEdge(ctx context.Context, fromID, toID string, label domain.EdgeLabel) error {
+	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO graph_edges (from_id, to_id, label) VALUES (?, ?, ?)`,
 		fromID, toID, label,
 	)
@@ -107,8 +107,8 @@ func (s *Store) AddEdge(_ context.Context, fromID, toID string, label domain.Edg
 }
 
 // RemoveEdge deletes a specific edge.
-func (s *Store) RemoveEdge(_ context.Context, fromID, toID string, label domain.EdgeLabel) error {
-	_, err := s.db.Exec(
+func (s *Store) RemoveEdge(ctx context.Context, fromID, toID string, label domain.EdgeLabel) error {
+	_, err := s.db.ExecContext(ctx,
 		`DELETE FROM graph_edges WHERE from_id = ? AND to_id = ? AND label = ?`,
 		fromID, toID, label,
 	)
@@ -119,23 +119,23 @@ func (s *Store) RemoveEdge(_ context.Context, fromID, toID string, label domain.
 }
 
 // GetEdges returns edges for a node. Direction: "from", "to", or "both".
-func (s *Store) GetEdges(_ context.Context, nodeID string, direction string) ([]domain.GraphEdge, error) {
+func (s *Store) GetEdges(ctx context.Context, nodeID string, direction string) ([]domain.GraphEdge, error) {
 	var rows *sql.Rows
 	var err error
 
 	switch direction {
 	case "from":
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryContext(ctx,
 			`SELECT from_id, to_id, label FROM graph_edges WHERE from_id = ?`,
 			nodeID,
 		)
 	case "to":
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryContext(ctx,
 			`SELECT from_id, to_id, label FROM graph_edges WHERE to_id = ?`,
 			nodeID,
 		)
 	case "both":
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryContext(ctx,
 			`SELECT from_id, to_id, label FROM graph_edges WHERE from_id = ? OR to_id = ?`,
 			nodeID, nodeID,
 		)
@@ -162,8 +162,8 @@ func (s *Store) GetEdges(_ context.Context, nodeID string, direction string) ([]
 }
 
 // GetNeighbors returns nodes connected to nodeID via edges with the given label.
-func (s *Store) GetNeighbors(_ context.Context, nodeID string, label domain.EdgeLabel) ([]domain.GraphNode, error) {
-	rows, err := s.db.Query(
+func (s *Store) GetNeighbors(ctx context.Context, nodeID string, label domain.EdgeLabel) ([]domain.GraphNode, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT DISTINCT gn.engram_id, gn.node_type, gn.title, gn.active, gn.cached_at
 		 FROM graph_nodes gn
 		 JOIN graph_edges ge ON gn.engram_id = ge.to_id OR gn.engram_id = ge.from_id
@@ -190,7 +190,7 @@ func (s *Store) GetDomainTree(ctx context.Context) ([]domain.DomainWithSubareas,
 		dws := domain.DomainWithSubareas{Domain: d}
 
 		// Find subareas connected via "contains" edges from this domain
-		rows, err := s.db.Query(
+		rows, err := s.db.QueryContext(ctx,
 			`SELECT gn.engram_id, gn.node_type, gn.title, gn.active, gn.cached_at
 			 FROM graph_nodes gn
 			 JOIN graph_edges ge ON gn.engram_id = ge.to_id
@@ -214,10 +214,18 @@ func (s *Store) GetDomainTree(ctx context.Context) ([]domain.DomainWithSubareas,
 }
 
 // ListActiveProjects returns all projects with active=1.
-func (s *Store) ListActiveProjects(_ context.Context) ([]domain.Project, error) {
-	rows, err := s.db.Query(
-		`SELECT engram_id, title FROM graph_nodes
-		 WHERE node_type = ? AND active = 1 ORDER BY title`,
+//
+// IMPORTANT: This query is intentionally set-based (no nested N+1 sub-queries)
+// to avoid SQLite contention/timeout when the store is concurrently used.
+func (s *Store) ListActiveProjects(ctx context.Context) ([]domain.Project, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT p.engram_id, p.title, ge.to_id
+		 FROM graph_nodes p
+		 LEFT JOIN graph_edges ge
+			ON ge.from_id = p.engram_id AND ge.label = ?
+		 WHERE p.node_type = ? AND p.active = 1
+		 ORDER BY p.title, ge.to_id`,
+		domain.EdgeAppliesTo,
 		domain.NodeTypeProject,
 	)
 	if err != nil {
@@ -225,57 +233,56 @@ func (s *Store) ListActiveProjects(_ context.Context) ([]domain.Project, error) 
 	}
 	defer func() { _ = rows.Close() }()
 
-	var projects []domain.Project
+	projectsByID := map[string]*domain.Project{}
+	order := make([]string, 0, 16)
+
 	for rows.Next() {
 		var engramID, title string
-		if err := rows.Scan(&engramID, &title); err != nil {
+		var subareaID sql.NullString
+
+		if err := rows.Scan(&engramID, &title, &subareaID); err != nil {
 			return nil, fmt.Errorf("store: scan project: %w", err)
 		}
 
-		// Fetch subarea links via "applies_to" edges
-		subareaRows, err := s.db.Query(
-			`SELECT to_id FROM graph_edges
-			 WHERE from_id = ? AND label = ?`,
-			engramID, domain.EdgeAppliesTo,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("store: query project subareas: %w", err)
-		}
-
-		var subareaIDs []string
-		for subareaRows.Next() {
-			var sid string
-			if err := subareaRows.Scan(&sid); err != nil {
-				_ = subareaRows.Close()
-				return nil, fmt.Errorf("store: scan project subarea: %w", err)
+		p, ok := projectsByID[engramID]
+		if !ok {
+			proj := domain.Project{
+				Name:   title,
+				Slug:   domain.Slugify(title),
+				Active: true,
 			}
-			subareaIDs = append(subareaIDs, sid)
+			projectsByID[engramID] = &proj
+			order = append(order, engramID)
+			p = &proj
 		}
-		_ = subareaRows.Close()
 
-		projects = append(projects, domain.Project{
-			Name:       title,
-			Slug:       domain.Slugify(title),
-			Active:     true,
-			SubareaIDs: subareaIDs,
-		})
+		if subareaID.Valid && subareaID.String != "" {
+			p.SubareaIDs = append(p.SubareaIDs, subareaID.String)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store: projects iteration: %w", err)
+	}
+
+	projects := make([]domain.Project, 0, len(order))
+	for _, id := range order {
+		if p := projectsByID[id]; p != nil {
+			projects = append(projects, *p)
+		}
 	}
 	return projects, nil
 }
 
 // UpsertPerson inserts or replaces a person node. Used for auto-creating the default user.
-func (s *Store) UpsertPerson(_ context.Context, node domain.GraphNode) error {
-	return s.UpsertNode(context.Background(), node)
+func (s *Store) UpsertPerson(ctx context.Context, node domain.GraphNode) error {
+	return s.UpsertNode(ctx, node)
 }
 
 // ListSessions returns sessions for a given project.
-func (s *Store) ListSessions(_ context.Context, projectID string) ([]domain.Session, error) {
+func (s *Store) ListSessions(ctx context.Context, projectID string) ([]domain.Session, error) {
 	// Edge direction: Session --worked_on--> Project
 	// Find sessions where the edge points TO this project.
-	rows, err := s.db.Query(
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT gn.engram_id, gn.title, gn.cached_at
 		 FROM graph_nodes gn
 		 JOIN graph_edges ge ON gn.engram_id = ge.from_id
@@ -308,11 +315,11 @@ func (s *Store) ListSessions(_ context.Context, projectID string) ([]domain.Sess
 }
 
 // GetSession retrieves a session by ID.
-func (s *Store) GetSession(_ context.Context, id string) (domain.Session, error) {
+func (s *Store) GetSession(ctx context.Context, id string) (domain.Session, error) {
 	var session domain.Session
 	var title, cachedAt string
 
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT engram_id, title, cached_at FROM graph_nodes WHERE engram_id = ? AND node_type = ?`,
 		id, domain.NodeTypeSession,
 	).Scan(&session.ID, &title, &cachedAt)
@@ -329,7 +336,7 @@ func (s *Store) GetSession(_ context.Context, id string) (domain.Session, error)
 
 	// Find project via worked_on edge (session is the "to" side)
 	var projectID sql.NullString
-	_ = s.db.QueryRow(
+	_ = s.db.QueryRowContext(ctx,
 		`SELECT from_id FROM graph_edges WHERE to_id = ? AND label = ?`,
 		id, domain.EdgeWorkedOn,
 	).Scan(&projectID)
@@ -341,14 +348,14 @@ func (s *Store) GetSession(_ context.Context, id string) (domain.Session, error)
 }
 
 // ListLearnings returns learnings, optionally filtered by subarea.
-func (s *Store) ListLearnings(_ context.Context, subareaID string) ([]domain.Learning, error) {
+func (s *Store) ListLearnings(ctx context.Context, subareaID string) ([]domain.Learning, error) {
 	var rows *sql.Rows
 	var err error
 
 	if subareaID != "" {
 		// Edge direction: Learning --applies_to--> Subarea
 		// Find learnings where the edge points TO this subarea.
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryContext(ctx,
 			`SELECT DISTINCT gn.engram_id, gn.title, gn.cached_at
 			 FROM graph_nodes gn
 			 JOIN graph_edges ge ON gn.engram_id = ge.from_id
@@ -357,7 +364,7 @@ func (s *Store) ListLearnings(_ context.Context, subareaID string) ([]domain.Lea
 			subareaID, domain.EdgeAppliesTo, domain.NodeTypeLearning,
 		)
 	} else {
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryContext(ctx,
 			`SELECT engram_id, title, cached_at FROM graph_nodes
 			 WHERE node_type = ? AND active = 1 ORDER BY cached_at DESC`,
 			domain.NodeTypeLearning,
@@ -381,7 +388,7 @@ func (s *Store) ListLearnings(_ context.Context, subareaID string) ([]domain.Lea
 		}
 
 		// Fetch linked subareas via references edges (learning → subarea)
-		subRows, serr := s.db.Query(
+		subRows, serr := s.db.QueryContext(ctx,
 			`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
 			id, domain.EdgeReferences,
 		)
@@ -396,7 +403,7 @@ func (s *Store) ListLearnings(_ context.Context, subareaID string) ([]domain.Lea
 		}
 
 		// Fetch linked sessions via learned_from edges (learning → session)
-		sessRows, serr := s.db.Query(
+		sessRows, serr := s.db.QueryContext(ctx,
 			`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
 			id, domain.EdgeLearnedFrom,
 		)
@@ -420,11 +427,11 @@ func (s *Store) ListLearnings(_ context.Context, subareaID string) ([]domain.Lea
 }
 
 // GetLearning retrieves a learning by ID.
-func (s *Store) GetLearning(_ context.Context, id string) (domain.Learning, error) {
+func (s *Store) GetLearning(ctx context.Context, id string) (domain.Learning, error) {
 	var learning domain.Learning
 	var content, cachedAt string
 
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT engram_id, title, cached_at FROM graph_nodes WHERE engram_id = ? AND node_type = ?`,
 		id, domain.NodeTypeLearning,
 	).Scan(&learning.ID, &content, &cachedAt)
@@ -440,7 +447,7 @@ func (s *Store) GetLearning(_ context.Context, id string) (domain.Learning, erro
 	learning.CreatedAt = parseTime(cachedAt)
 
 	// Fetch linked subareas
-	subRows, err := s.db.Query(
+	subRows, err := s.db.QueryContext(ctx,
 		`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
 		id, domain.EdgeReferences,
 	)
@@ -456,7 +463,7 @@ func (s *Store) GetLearning(_ context.Context, id string) (domain.Learning, erro
 
 	// Fetch linked session
 	var sessionID sql.NullString
-	_ = s.db.QueryRow(
+	_ = s.db.QueryRowContext(ctx,
 		`SELECT to_id FROM graph_edges WHERE from_id = ? AND label = ?`,
 		id, domain.EdgeLearnedFrom,
 	).Scan(&sessionID)
