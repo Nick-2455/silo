@@ -35,6 +35,32 @@ brew install gentleman-programming/tap/engram
 
 Silo is not the memory source. It is the readable knowledge layer on top of Engram.
 
+## Note model
+
+Silo uses a community-facing note vocabulary. Every note has a **type** and an optional **kind**:
+
+| Type | Description | Kinds |
+|------|-------------|-------|
+| `concept` | A discrete idea, term, or principle | — |
+| `resource` | An external resource to read or watch | `article`, `book`, `video`, `tool`, `paper`, `course` |
+| `roadmap` | A staged learning or project plan | — |
+| `collection` | A named grouping of related notes | `subject`, `project`, `interest`, `career-path`, `research`, `team-space` |
+
+When you call `create_or_update_note` with a `type`, Silo injects the appropriate frontmatter defaults automatically. Use `list_note_templates` to browse available templates and `get_note_template` to fetch the full Markdown body.
+
+```yaml
+# Example: a resource note
+type: resource
+kind: book
+title: "my-book-title"
+tags: []
+url: ""
+status: unread
+created: 2024-01-01
+```
+
+Templates are generic — no personal taxonomy is baked in. You define what a `collection` means for your workflow.
+
 ## MVP scope
 
 Silo's MVP scope is intentionally small.
@@ -132,15 +158,17 @@ When running `silo --server`, these tools are available to AI agents:
 | `list_person` | View your profile node |
 | `sync_obsidian` | Export the legacy graph to Obsidian |
 
-Planned MVP bridge tools:
+MVP bridge tools (available now):
 
-| Tool | What it will do |
+| Tool | What it does |
 |------|-------------|
 | `read_from_engram` | Read knowledge items from Engram |
 | `sync_to_obsidian` | Write Engram knowledge into Markdown notes |
 | `search_vault` | Search Markdown notes in the Obsidian vault |
-| `create_or_update_note` | Create or update one Markdown note safely |
+| `create_or_update_note` | Create or update one Markdown note (supports `type` and `kind`) |
 | `get_knowledge_context` | Combine Engram and vault results into agent context |
+| `list_note_templates` | List community note types with metadata and frontmatter schema |
+| `get_note_template` | Fetch the full Markdown body for a specific note type |
 
 ## Obsidian sync
 
@@ -151,11 +179,11 @@ Your graph appears under `Silo/` in your vault:
 ```
 Silo/
   Persona.md
-  Domains/Dev.md
+  Domains/Engineering.md
   Subareas/Backend.md
-  Projects/silo.md
-  Sessions/Debug de Engram MCP client.md
-  Learnings/mem_update reemplaza contenido entero.md
+  Projects/my-project.md
+  Sessions/my-session.md
+  Learnings/my-learning.md
 ```
 
 Files use YAML frontmatter and `[[wikilinks]]` — open Obsidian's graph view and you'll see your knowledge as a connected web.
