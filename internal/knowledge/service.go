@@ -193,5 +193,7 @@ func noteFromKnowledge(item KnowledgeItem) Note {
 		Title:       item.Title,
 		Content:     content,
 		Frontmatter: frontmatter,
+		// Sync operations should be idempotent; overwrite existing files.
+		Overwrite: true,
 	}
 }

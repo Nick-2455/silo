@@ -33,8 +33,6 @@ func NewServer() *server.MCPServer {
 	s.AddTool(linkProjectTool(), handleLinkProject)
 	s.AddTool(toggleProjectTool(), handleToggleProject)
 	s.AddTool(discoverProjectTool(), handleDiscoverProject)
-
-	s.AddTool(discoverProjectTool(), handleDiscoverProject)
 	s.AddTool(importProjectTool(), handleImportProject)
 
 	// Session and Learning tools

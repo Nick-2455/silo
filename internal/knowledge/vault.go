@@ -38,12 +38,18 @@ func (s VaultStore) CreateOrUpdateNote(ctx context.Context, vaultPath string, no
 		return NoteWriteResult{}, fmt.Errorf("render markdown: %w", err)
 	}
 
-	created := false
+	exists := false
 	if _, err := os.Stat(target); errors.Is(err, os.ErrNotExist) {
-		created = true
+		exists = false
 	} else if err != nil {
 		return NoteWriteResult{}, fmt.Errorf("stat note: %w", err)
+	} else {
+		exists = true
 	}
+	if exists && !note.Overwrite {
+		return NoteWriteResult{}, fmt.Errorf("note already exists: %s", target)
+	}
+	created := !exists
 
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return NoteWriteResult{}, fmt.Errorf("create note dir: %w", err)
@@ -134,7 +140,38 @@ func resolveNotePath(vaultPath string, note Note) (string, error) {
 	if !inside {
 		return "", errors.New("note path escapes vault")
 	}
+
+	// Compatibility: older versions derived default filenames from Title without lowercasing.
+	// On case-sensitive filesystems that can create duplicates (e.g. Engram-Memory.md vs engram-memory.md).
+	// For title-derived writes with overwrite=true, prefer updating an existing legacy-cased file.
+	if strings.TrimSpace(note.Path) == "" && note.Overwrite {
+		if legacy, ok := findExistingCaseInsensitive(target); ok {
+			target = legacy
+		}
+	}
 	return target, nil
+}
+
+func findExistingCaseInsensitive(target string) (string, bool) {
+	if _, err := os.Stat(target); err == nil {
+		return target, true
+	}
+
+	dir := filepath.Dir(target)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", false
+	}
+	want := strings.ToLower(filepath.Base(target))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.ToLower(e.Name()) == want {
+			return filepath.Join(dir, e.Name()), true
+		}
+	}
+	return "", false
 }
 
 func isInside(root, target string) (bool, error) {
@@ -161,7 +198,7 @@ func sanitizeFilename(name string) string {
 			}
 		}
 	}
-	clean := strings.Trim(b.String(), "-")
+	clean := strings.ToLower(strings.Trim(b.String(), "-"))
 	if clean == "" {
 		return "note"
 	}
