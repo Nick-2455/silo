@@ -1,8 +1,8 @@
 # Silo
 
-**Second brain for knowledge work.** Track what you learn, connect it to your projects, and build a living map of everything you know — not just a library of bookmarks.
+**Markdown knowledge layer for Engram and Obsidian.** Silo turns persistent agent memory into human-readable notes without becoming a second memory database.
 
-Silo is a knowledge graph orchestrator: a TUI app + MCP server that helps you organize resources, track projects, extract learnings from work sessions, and sync your knowledge to Obsidian.
+Silo is a bridge: **Engram stores memory**, **Silo renders and maintains Markdown**, and **Obsidian is the human interface** for reading, editing, and organizing that knowledge.
 
 ## Quick path
 
@@ -27,14 +27,34 @@ brew install gentleman-programming/tap/engram
 
 | You do | Silo does |
 |--------|-----------|
-| Save a resource (URL, PDF, video) | Tags it by domain, places it in your roadmap |
-| Define your domains (Dev, Philosophy, Cinema) | Builds a taxonomy hierarchy (Domain → Subareas) |
-| Track active projects | Links projects to subareas, shows what you're working on |
-| Log a work session | Connects it to projects, extracts what you learned |
-| Review your learnings | Shows everything you've learned, filterable by domain |
-| Press `o` | Syncs your entire knowledge graph to Obsidian with wikilinks |
+| Capture knowledge with agents | Engram stores it as persistent memory |
+| Ask for knowledge context | Silo reads Engram and Markdown notes |
+| Maintain an Obsidian vault | Silo creates, updates, and searches Markdown notes |
+| Use MCP clients | Silo exposes small tools for knowledge lookup and note maintenance |
+| Keep legacy graph data | Existing TUI/MCP graph flows remain available during the transition |
 
-Silo is the orchestrator — **you** decide what matters, Silo organizes it and keeps agents informed.
+Silo is not the memory source. It is the readable knowledge layer on top of Engram.
+
+## MVP scope
+
+Silo's MVP scope is intentionally small.
+
+### Silo does
+
+- Read knowledge from Engram.
+- Create and update Markdown notes in an Obsidian vault.
+- Search Markdown files in the vault.
+- Build concise knowledge context from Engram and vault notes.
+- Expose simple MCP tools for agents to query and maintain knowledge.
+- Keep existing legacy graph/TUI flows working while the new bridge is introduced.
+
+### Silo does not do
+
+- Replace Engram as persistent agent memory.
+- Maintain a second structured memory database as source of truth.
+- Provide perfect bidirectional sync between Engram and Obsidian.
+- Resolve complex conflicts between edited notes and Engram observations.
+- Rebuild every legacy graph feature in the first MVP slice.
 
 ## Screens
 
@@ -52,7 +72,9 @@ Silo is the orchestrator — **you** decide what matters, Silo organizes it and 
 
 Navigation: `↑/↓` or `j/k`, `Enter` to select, `Esc` to go back, `q` to quit.
 
-## Knowledge graph
+## Legacy knowledge graph
+
+Silo still includes a legacy graph model for compatibility. New MVP work should treat it as a legacy projection, not the source of truth.
 
 Every piece of knowledge is a **node**. Connections are **edges**.
 
@@ -68,7 +90,9 @@ Resource ──references──▶ Subarea
 
 A single learning can connect to **multiple** subareas and projects. You debugged an MCP client bug in the `silo` project and learned something that applies to both Backend and iOS.
 
-## ALM cycle
+## Legacy ALM cycle
+
+The ALM cycle below describes the original product direction. The MVP bridge direction is simpler: Engram persists memory, Silo writes Markdown, and Obsidian presents it to humans.
 
 Silo moves knowledge through four phases:
 
@@ -84,6 +108,8 @@ The cycle is per-resource, not a linear pipeline. Resources flow through as you 
 ## MCP tools
 
 When running `silo --server`, these tools are available to AI agents:
+
+> The current server still includes legacy graph tools. The MVP bridge tools are being introduced in slices.
 
 | Tool | What it does |
 |------|-------------|
@@ -104,7 +130,17 @@ When running `silo --server`, these tools are available to AI agents:
 | `list_learnings` | Browse extracted learnings |
 | `link_resource` | Tag a resource with a subarea |
 | `list_person` | View your profile node |
-| `sync_obsidian` | Export the graph to Obsidian |
+| `sync_obsidian` | Export the legacy graph to Obsidian |
+
+Planned MVP bridge tools:
+
+| Tool | What it will do |
+|------|-------------|
+| `read_from_engram` | Read knowledge items from Engram |
+| `sync_to_obsidian` | Write Engram knowledge into Markdown notes |
+| `search_vault` | Search Markdown notes in the Obsidian vault |
+| `create_or_update_note` | Create or update one Markdown note safely |
+| `get_knowledge_context` | Combine Engram and vault results into agent context |
 
 ## Obsidian sync
 
@@ -124,6 +160,16 @@ Silo/
 
 Files use YAML frontmatter and `[[wikilinks]]` — open Obsidian's graph view and you'll see your knowledge as a connected web.
 
+The MVP bridge writes simpler notes under:
+
+```txt
+Silo/
+  Knowledge/
+    <note>.md
+```
+
+Those notes are Markdown views over Engram knowledge, not a replacement for Engram memory.
+
 ## Configuration
 
 `~/.config/silo/config.yaml`:
@@ -139,17 +185,21 @@ The vault path is set interactively — press `o`, type the path, press Enter. N
 ## Architecture
 
 ```
-TUI (Bubble Tea) ──▶ GraphStore (SQLite topology) 
-                   ──▶ Engram (MCP, durable content)
-                   
-MCP Server ──▶ Same backend, exposes tools to agents
+Engram ──▶ Silo knowledge layer ──▶ Obsidian Markdown vault
+  ▲                ▲
+  │                │
+Agents ◀──────── MCP tools
 
-Obsidian ◀── Syncer exports GraphStore as .md files
+Legacy TUI/MCP ──▶ GraphStore (SQLite projection) ──▶ legacy Obsidian sync
+                  └──────────────▶ Engram
 ```
 
-- **SQLite**: fast graph queries (neighbors, paths, active projects). Local cache of graph topology.
-- **Engram**: durable content storage with semantic search. Agents query it via `mem_search`.
-- **Syncer**: one-directional export to Obsidian for human browsing and graph visualization.
+- **Engram**: persistent agent memory and semantic search source.
+- **Silo knowledge layer**: reads Engram, writes/searches Markdown, and builds context.
+- **Obsidian**: human reading, editing, and organization interface.
+- **SQLite graph store**: legacy local projection/cache, not the source of truth for new MVP flows.
+
+The design goal is boring on purpose: small MCP tools, Markdown files, and no duplicated memory system.
 
 ## Contributing
 
