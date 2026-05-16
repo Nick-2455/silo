@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/Nick-2455/silo/internal/knowledge"
+	"github.com/Nick-2455/silo/internal/knowledge/notemodel"
 )
 
 // KnowledgeService is the subset of knowledge.Service that the MCP handlers use.
@@ -87,12 +88,31 @@ func searchVaultTool() mcp.Tool {
 
 func createOrUpdateNoteTool() mcp.Tool {
 	return mcp.NewTool("create_or_update_note",
-		mcp.WithDescription("Create or update a Markdown note in the Obsidian vault."),
+		mcp.WithDescription("Create or update a Markdown note in the Obsidian vault. "+
+			"Pass type (concept | resource | roadmap | collection) to apply community note-model frontmatter defaults. "+
+			"Pass kind to further classify the note (e.g. resource kind: book)."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("Note title used to derive a filename when no path is given")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Markdown body")),
 		mcp.WithString("path", mcp.Description("Relative path inside the vault; optional")),
 		mcp.WithString("vault_path", mcp.Description("Vault path; defaults to obsidian_vault_path config")),
-		mcp.WithString("type", mcp.Description("Optional note type stored in frontmatter")),
+		mcp.WithString("type", mcp.Description("Community note type: concept, resource, roadmap, or collection")),
+		mcp.WithString("kind", mcp.Description("Optional sub-category (e.g. book, article for resource; subject, project for collection)")),
+	)
+}
+
+func listNoteTemplatesTool() mcp.Tool {
+	return mcp.NewTool("list_note_templates",
+		mcp.WithDescription("List available community note templates with their type, description, and frontmatter schema. "+
+			"Use get_note_template to fetch the full Markdown body for a specific type."),
+	)
+}
+
+func getNoteTemplateTool() mcp.Tool {
+	return mcp.NewTool("get_note_template",
+		mcp.WithDescription("Fetch the full Markdown body for a community note template. "+
+			"Returns the raw template with frontmatter and placeholder body sections."),
+		mcp.WithString("type", mcp.Required(), mcp.Description("Note type: concept, resource, roadmap, or collection")),
+		mcp.WithString("kind", mcp.Description("Optional kind hint (informational only; does not change the returned body)")),
 	)
 }
 
@@ -208,9 +228,8 @@ func handleCreateOrUpdateNote(ctx context.Context, req mcp.CallToolRequest) (*mc
 		Title:   title,
 		Path:    req.GetString("path", ""),
 		Content: content,
-	}
-	if t := req.GetString("type", ""); t != "" {
-		note.Frontmatter = map[string]any{"type": t}
+		Type:    req.GetString("type", ""),
+		Kind:    req.GetString("kind", ""),
 	}
 	result, err := svc.CreateOrUpdateNote(ctx, vaultPath, note)
 	if err != nil {
@@ -243,6 +262,49 @@ func handleGetKnowledgeContext(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("get_knowledge_context: %v", err)), nil
 	}
 	return jsonResult(ctxResult)
+}
+
+func handleListNoteTemplates(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	tmpls := notemodel.Templates()
+	// Return metadata only — body is omitted; use get_note_template for the body.
+	type meta struct {
+		Type              string                      `json:"type"`
+		DefaultKind       string                      `json:"default_kind,omitempty"`
+		Description       string                      `json:"description"`
+		FrontmatterSchema notemodel.FrontmatterSchema `json:"frontmatter_schema"`
+	}
+	out := make([]meta, len(tmpls))
+	for i, t := range tmpls {
+		out[i] = meta{
+			Type:              string(t.Type),
+			DefaultKind:       t.DefaultKind,
+			Description:       t.Description,
+			FrontmatterSchema: t.FrontmatterSchema,
+		}
+	}
+	return jsonResult(map[string]any{
+		"templates": out,
+		"count":     len(out),
+	})
+}
+
+func handleGetNoteTemplate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	rawType, err := req.RequireString("type")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	t := notemodel.Type(rawType)
+	tmpl, ok := notemodel.Get(t)
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf(
+			"unknown note type %q: valid types are concept, resource, roadmap, collection", rawType,
+		)), nil
+	}
+	return jsonResult(map[string]any{
+		"type": string(tmpl.Type),
+		"kind": req.GetString("kind", tmpl.DefaultKind),
+		"body": tmpl.Body(),
+	})
 }
 
 func jsonResult(payload any) (*mcp.CallToolResult, error) {
