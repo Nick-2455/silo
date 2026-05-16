@@ -46,6 +46,13 @@ func NewServer() *server.MCPServer {
 	s.AddTool(listPersonTool(), handleListPerson)
 	s.AddTool(syncObsidianTool(), handleSyncObsidian)
 
+	// MVP bridge tools
+	s.AddTool(readFromEngramTool(), handleReadFromEngram)
+	s.AddTool(syncToObsidianTool(), handleSyncToObsidian)
+	s.AddTool(searchVaultTool(), handleSearchVault)
+	s.AddTool(createOrUpdateNoteTool(), handleCreateOrUpdateNote)
+	s.AddTool(getKnowledgeContextTool(), handleGetKnowledgeContext)
+
 	return s
 }
 
