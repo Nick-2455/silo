@@ -200,6 +200,9 @@ func TestHandleCreateOrUpdateNote_WritesAndReportsResult(t *testing.T) {
 			if vaultPath != vault || note.Title != "Bridge" || note.Content != "Body" {
 				t.Fatalf("unexpected note: %+v in %s", note, vaultPath)
 			}
+			if note.Overwrite {
+				t.Fatalf("expected overwrite=false by default")
+			}
 			return knowledge.NoteWriteResult{Path: filepath.Join(vault, "Bridge.md"), Created: true}, nil
 		},
 	}
@@ -363,6 +366,109 @@ func TestHandleCreateOrUpdateNote_WithTypeAndKindWritesFrontmatter(t *testing.T)
 	}
 	if capturedNote.Kind != "book" {
 		t.Errorf("expected Kind=book, got %q", capturedNote.Kind)
+	}
+}
+
+func TestHandleCreateOrUpdateNote_RejectsUnknownTypeAtBoundary(t *testing.T) {
+	vault := t.TempDir()
+	fake := &fakeKnowledgeService{
+		writeFn: func(_ context.Context, _ string, _ knowledge.Note) (knowledge.NoteWriteResult, error) {
+			t.Fatal("service should not be called when validation fails")
+			return knowledge.NoteWriteResult{}, nil
+		},
+	}
+	handlerDeps = depsWithKnowledge(fake, vault)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"title":   "Whatever",
+		"content": "Body",
+		"type":    "quiz",
+	}
+	res, err := handleCreateOrUpdateNote(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle create: %v", err)
+	}
+	text := res.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "unknown note type") {
+		t.Fatalf("expected unknown note type error, got: %s", text)
+	}
+}
+
+func TestHandleCreateOrUpdateNote_RejectsUnknownKindAtBoundary(t *testing.T) {
+	vault := t.TempDir()
+	fake := &fakeKnowledgeService{
+		writeFn: func(_ context.Context, _ string, _ knowledge.Note) (knowledge.NoteWriteResult, error) {
+			t.Fatal("service should not be called when validation fails")
+			return knowledge.NoteWriteResult{}, nil
+		},
+	}
+	handlerDeps = depsWithKnowledge(fake, vault)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"title":   "Whatever",
+		"content": "Body",
+		"type":    "resource",
+		"kind":    "podcast",
+	}
+	res, err := handleCreateOrUpdateNote(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle create: %v", err)
+	}
+	text := res.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "unknown kind") {
+		t.Fatalf("expected unknown kind error, got: %s", text)
+	}
+}
+
+func TestHandleCreateOrUpdateNote_RejectsKindWithoutTypeAtBoundary(t *testing.T) {
+	vault := t.TempDir()
+	fake := &fakeKnowledgeService{
+		writeFn: func(_ context.Context, _ string, _ knowledge.Note) (knowledge.NoteWriteResult, error) {
+			t.Fatal("service should not be called when validation fails")
+			return knowledge.NoteWriteResult{}, nil
+		},
+	}
+	handlerDeps = depsWithKnowledge(fake, vault)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"title":   "Whatever",
+		"content": "Body",
+		"kind":    "book",
+	}
+	res, err := handleCreateOrUpdateNote(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle create: %v", err)
+	}
+	text := res.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "kind is only valid") {
+		t.Fatalf("expected kind-without-type boundary error, got: %s", text)
+	}
+}
+
+func TestHandleCreateOrUpdateNote_PassesOverwriteFlag(t *testing.T) {
+	vault := t.TempDir()
+	fake := &fakeKnowledgeService{
+		writeFn: func(_ context.Context, _ string, note knowledge.Note) (knowledge.NoteWriteResult, error) {
+			if !note.Overwrite {
+				t.Fatalf("expected overwrite=true")
+			}
+			return knowledge.NoteWriteResult{Path: vault + "/note.md", Created: false}, nil
+		},
+	}
+	handlerDeps = depsWithKnowledge(fake, vault)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"title":     "Bridge",
+		"content":   "Body",
+		"overwrite": true,
+	}
+	_, err := handleCreateOrUpdateNote(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle create: %v", err)
 	}
 }
 

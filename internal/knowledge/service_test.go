@@ -65,7 +65,7 @@ func TestService_SyncToObsidianWritesNotes(t *testing.T) {
 		t.Fatalf("unexpected report: %+v", report)
 	}
 
-	expected := filepath.Join(vault, "Silo", "Knowledge", "Engram-Memory.md")
+	expected := filepath.Join(vault, "Silo", "Knowledge", "engram-memory.md")
 	if _, err := os.Stat(expected); err != nil {
 		t.Fatalf("expected note at %s: %v", expected, err)
 	}

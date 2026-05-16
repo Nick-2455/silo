@@ -18,6 +18,9 @@ type Note struct {
 	Path        string         `json:"path,omitempty"`
 	Content     string         `json:"content"`
 	Frontmatter map[string]any `json:"frontmatter,omitempty"`
+	// Overwrite controls collision behavior when the resolved target path already exists.
+	// Safe default is false (fail on collision).
+	Overwrite bool `json:"overwrite,omitempty"`
 	// Type is an optional community note type (concept, resource, roadmap, collection).
 	// When non-empty, notemodel.ApplyDefaults is called to inject frontmatter defaults.
 	Type string `json:"type,omitempty"`

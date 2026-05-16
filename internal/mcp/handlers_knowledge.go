@@ -95,6 +95,7 @@ func createOrUpdateNoteTool() mcp.Tool {
 		mcp.WithString("content", mcp.Required(), mcp.Description("Markdown body")),
 		mcp.WithString("path", mcp.Description("Relative path inside the vault; optional")),
 		mcp.WithString("vault_path", mcp.Description("Vault path; defaults to obsidian_vault_path config")),
+		mcp.WithBoolean("overwrite", mcp.Description("Overwrite existing file when the resolved target path already exists (default: false)")),
 		mcp.WithString("type", mcp.Description("Community note type: concept, resource, roadmap, or collection")),
 		mcp.WithString("kind", mcp.Description("Optional sub-category (e.g. book, article for resource; subject, project for collection)")),
 	)
@@ -224,12 +225,23 @@ func handleCreateOrUpdateNote(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	rawType := req.GetString("type", "")
+	rawKind := req.GetString("kind", "")
+	if rawType == "" && rawKind != "" {
+		return mcp.NewToolResultError("kind is only valid when type is provided"), nil
+	}
+	if rawType != "" {
+		if err := notemodel.Validate(notemodel.Type(rawType), rawKind); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+	}
 	note := knowledge.Note{
 		Title:   title,
 		Path:    req.GetString("path", ""),
 		Content: content,
-		Type:    req.GetString("type", ""),
-		Kind:    req.GetString("kind", ""),
+		Overwrite: req.GetBool("overwrite", false),
+		Type:      rawType,
+		Kind:      rawKind,
 	}
 	result, err := svc.CreateOrUpdateNote(ctx, vaultPath, note)
 	if err != nil {
