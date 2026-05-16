@@ -227,6 +227,32 @@ func newTestDeps() *Deps {
 	}
 }
 
+func TestCreateLearningTool_ArraySchemasDeclareStringItems(t *testing.T) {
+	tool := createLearningTool()
+
+	for _, field := range []string{"subarea_slugs", "project_slugs"} {
+		t.Run(field, func(t *testing.T) {
+			prop, ok := tool.InputSchema.Properties[field].(map[string]any)
+			if !ok {
+				t.Fatalf("expected %s schema property", field)
+			}
+
+			if got := prop["type"]; got != "array" {
+				t.Fatalf("expected %s type=array, got %v", field, got)
+			}
+
+			items, ok := prop["items"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected %s to declare items schema", field)
+			}
+
+			if got := items["type"]; got != "string" {
+				t.Fatalf("expected %s items.type=string, got %v", field, got)
+			}
+		})
+	}
+}
+
 func TestHandleSearch_EngramSuccess(t *testing.T) {
 	handlerDeps = &Deps{
 		Engram: &mockEngramClient{
