@@ -256,6 +256,7 @@ func (s *Syncer) filePath(subdir, title string) string {
 
 type frontmatter struct {
 	Type     string   `yaml:"type"`
+	Kind     string   `yaml:"kind,omitempty"`
 	Slug     string   `yaml:"slug,omitempty"`
 	Active   bool     `yaml:"active,omitempty"`
 	Subareas []string `yaml:"subareas,omitempty"`

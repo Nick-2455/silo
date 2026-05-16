@@ -30,6 +30,8 @@ Requires Engram installed and in PATH for integration tests.
 | `internal/engram` | MCP stdio client to Engram — content CRUD |
 | `internal/tui` | Bubble Tea TUI — screens, router, styles |
 | `internal/mcp` | MCP server — tools exposed to external agents |
+| `internal/knowledge` | MVP bridge — Engram reads, vault writes, knowledge context |
+| `internal/knowledge/notemodel` | Community note vocabulary — types, kinds, templates, frontmatter defaults |
 | `internal/obsidian` | Vault export — markdown + wikilinks |
 | `internal/app` | Dependency bootstrap |
 | `internal/config` | YAML config loading |
@@ -43,9 +45,21 @@ Requires Engram installed and in PATH for integration tests.
 5. Add keyboard shortcut in `handleKey()`
 6. Wire `View()` to new screen
 
+## Note model and templates
+
+Silo's community note vocabulary lives in `internal/knowledge/notemodel/`. Templates are Markdown files embedded from `internal/knowledge/notemodel/templates/` and documented copies live at `templates/knowledge/`.
+
+**Rules for templates:**
+
+- Templates MUST be generic. No personal project names, personal subject lists, or user-specific defaults.
+- Use placeholder values: `my-concept`, `my-topic`, `my-collection` — never real names.
+- The four base types (`concept`, `resource`, `roadmap`, `collection`) are fixed. Do not add new base types without a spec change.
+- New `kind` values for existing types are acceptable — add them to the `kindSets` map in `notemodel.go` and document in `README.md`.
+- The `templates/knowledge/` directory at the repo root mirrors the embedded templates for community discoverability. Keep them in sync.
+
 ## Adding an MCP tool
 
-1. Add handler in `internal/mcp/handlers_graph.go`
+1. Add handler in `internal/mcp/handlers_graph.go` or `internal/mcp/handlers_knowledge.go`
 2. Register tool with JSON schema in `internal/mcp/server.go`
 
 ## Adding a node type

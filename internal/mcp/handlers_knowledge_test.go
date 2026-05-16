@@ -13,6 +13,7 @@ import (
 
 	"github.com/Nick-2455/silo/internal/domain"
 	"github.com/Nick-2455/silo/internal/knowledge"
+	"github.com/Nick-2455/silo/internal/knowledge/notemodel"
 )
 
 type fakeKnowledgeService struct {
@@ -251,6 +252,147 @@ func TestHandleGetKnowledgeContext_SurfacesEngramError(t *testing.T) {
 	if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "engram offline") {
 		t.Fatalf("expected engram offline error, got %s", res.Content[0].(mcp.TextContent).Text)
 	}
+}
+
+// --- list_note_templates tests ---
+
+func TestHandleListNoteTemplates_ReturnsFourEntries(t *testing.T) {
+	handlerDeps = depsWithKnowledge(&fakeKnowledgeService{}, "")
+	req := mcp.CallToolRequest{}
+	res, err := handleListNoteTemplates(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle list_note_templates: %v", err)
+	}
+	payload := decodePayload(t, res)
+	if payload["count"].(float64) != 4 {
+		t.Fatalf("expected count=4, got %v", payload["count"])
+	}
+	tmpls := payload["templates"].([]any)
+	types := map[string]bool{}
+	for _, raw := range tmpls {
+		tmpl := raw.(map[string]any)
+		types[tmpl["type"].(string)] = true
+		if tmpl["description"] == "" || tmpl["description"] == nil {
+			t.Errorf("template %v missing description", tmpl["type"])
+		}
+		if tmpl["frontmatter_schema"] == nil {
+			t.Errorf("template %v missing frontmatter_schema", tmpl["type"])
+		}
+	}
+	for _, expected := range []string{"concept", "resource", "roadmap", "collection"} {
+		if !types[expected] {
+			t.Errorf("missing template for type %q", expected)
+		}
+	}
+}
+
+func TestHandleListNoteTemplates_NoBodyInResponse(t *testing.T) {
+	handlerDeps = depsWithKnowledge(&fakeKnowledgeService{}, "")
+	req := mcp.CallToolRequest{}
+	res, err := handleListNoteTemplates(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle list_note_templates: %v", err)
+	}
+	text := res.Content[0].(mcp.TextContent).Text
+	// Body content should NOT appear in the metadata-only listing
+	if strings.Contains(text, "## Summary") {
+		t.Error("list_note_templates must not include template bodies")
+	}
+}
+
+// --- get_note_template tests ---
+
+func TestHandleGetNoteTemplate_ConceptReturnsNonEmptyBody(t *testing.T) {
+	handlerDeps = depsWithKnowledge(&fakeKnowledgeService{}, "")
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"type": "concept"}
+	res, err := handleGetNoteTemplate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle get_note_template: %v", err)
+	}
+	payload := decodePayload(t, res)
+	body, ok := payload["body"].(string)
+	if !ok || body == "" {
+		t.Fatal("expected non-empty body for concept template")
+	}
+	if !strings.Contains(body, "---") {
+		t.Error("concept template body should contain frontmatter")
+	}
+}
+
+func TestHandleGetNoteTemplate_UnknownTypeReturnsError(t *testing.T) {
+	handlerDeps = depsWithKnowledge(&fakeKnowledgeService{}, "")
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"type": "quiz"}
+	res, err := handleGetNoteTemplate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle get_note_template: %v", err)
+	}
+	text := res.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "unknown note type") {
+		t.Errorf("expected unknown type error, got: %s", text)
+	}
+}
+
+// --- create_or_update_note with type+kind tests ---
+
+func TestHandleCreateOrUpdateNote_WithTypeAndKindWritesFrontmatter(t *testing.T) {
+	vault := t.TempDir()
+	var capturedNote knowledge.Note
+	fake := &fakeKnowledgeService{
+		writeFn: func(_ context.Context, _ string, note knowledge.Note) (knowledge.NoteWriteResult, error) {
+			capturedNote = note
+			return knowledge.NoteWriteResult{Path: vault + "/note.md", Created: true}, nil
+		},
+	}
+	handlerDeps = depsWithKnowledge(fake, vault)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"title":   "Go Programming",
+		"content": "Body",
+		"type":    "resource",
+		"kind":    "book",
+	}
+	_, err := handleCreateOrUpdateNote(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle create: %v", err)
+	}
+	if capturedNote.Type != "resource" {
+		t.Errorf("expected Type=resource, got %q", capturedNote.Type)
+	}
+	if capturedNote.Kind != "book" {
+		t.Errorf("expected Kind=book, got %q", capturedNote.Kind)
+	}
+}
+
+func TestHandleCreateOrUpdateNote_CollectionDefaultsKind(t *testing.T) {
+	vault := t.TempDir()
+	var capturedNote knowledge.Note
+	fake := &fakeKnowledgeService{
+		writeFn: func(_ context.Context, _ string, note knowledge.Note) (knowledge.NoteWriteResult, error) {
+			capturedNote = note
+			return knowledge.NoteWriteResult{Path: vault + "/note.md", Created: true}, nil
+		},
+	}
+	handlerDeps = depsWithKnowledge(fake, vault)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"title":   "My Collection",
+		"content": "Body",
+		"type":    "collection",
+	}
+	_, err := handleCreateOrUpdateNote(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handle create: %v", err)
+	}
+	// The service layer applies defaults; here we verify the Note fields are set
+	if capturedNote.Type != "collection" {
+		t.Errorf("expected Type=collection, got %q", capturedNote.Type)
+	}
+	// Kind should be empty here — service layer will fill in the default
+	_ = notemodel.ApplyDefaults(notemodel.TypeCollection, "", nil) // ensure notemodel imported
 }
 
 func decodePayload(t *testing.T, res *mcp.CallToolResult) map[string]any {

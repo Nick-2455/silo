@@ -18,6 +18,11 @@ type Note struct {
 	Path        string         `json:"path,omitempty"`
 	Content     string         `json:"content"`
 	Frontmatter map[string]any `json:"frontmatter,omitempty"`
+	// Type is an optional community note type (concept, resource, roadmap, collection).
+	// When non-empty, notemodel.ApplyDefaults is called to inject frontmatter defaults.
+	Type string `json:"type,omitempty"`
+	// Kind is an optional sub-category for notes that support it (e.g. resource kind: book).
+	Kind string `json:"kind,omitempty"`
 }
 
 // NoteWriteResult describes a note write operation.

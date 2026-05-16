@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Nick-2455/silo/internal/knowledge/notemodel"
 )
 
 type fakeReader struct {
@@ -132,5 +134,79 @@ func TestService_GetKnowledgeContextSurfacesEngramErrors(t *testing.T) {
 	_, err := svc.GetKnowledgeContext(context.Background(), ContextRequest{Query: "x"})
 	if err == nil || !strings.Contains(err.Error(), "engram offline") {
 		t.Fatalf("expected engram error to surface, got: %v", err)
+	}
+}
+
+// --- notemodel integration tests ---
+
+type fakeVault struct {
+	lastNote Note
+}
+
+func (f *fakeVault) CreateOrUpdateNote(_ context.Context, _ string, note Note) (NoteWriteResult, error) {
+	f.lastNote = note
+	return NoteWriteResult{Path: "fake.md", Created: true}, nil
+}
+
+func (f *fakeVault) SearchVault(_ context.Context, _, _ string, _ int) ([]NoteSearchResult, error) {
+	return nil, nil
+}
+
+func TestService_CreateOrUpdateNote_AppliesDefaultsWhenTypeSet(t *testing.T) {
+	vault := &fakeVault{}
+	svc := NewService(nil, vault)
+
+	note := Note{
+		Title:   "My Resource",
+		Content: "body",
+		Type:    "resource",
+		Kind:    "book",
+	}
+	_, err := svc.CreateOrUpdateNote(context.Background(), "/vault", note)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	fm := vault.lastNote.Frontmatter
+	if fm["type"] != "resource" {
+		t.Errorf("expected frontmatter type=resource, got %v", fm["type"])
+	}
+	if fm["kind"] != "book" {
+		t.Errorf("expected frontmatter kind=book, got %v", fm["kind"])
+	}
+}
+
+func TestService_CreateOrUpdateNote_DefaultsKindWhenOmitted(t *testing.T) {
+	vault := &fakeVault{}
+	svc := NewService(nil, vault)
+
+	note := Note{
+		Title:   "My Collection",
+		Content: "body",
+		Type:    "collection",
+	}
+	_, err := svc.CreateOrUpdateNote(context.Background(), "/vault", note)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	fm := vault.lastNote.Frontmatter
+	if fm["kind"] != notemodel.ApplyDefaults(notemodel.TypeCollection, "", nil)["kind"] {
+		t.Errorf("expected default kind for collection, got %v", fm["kind"])
+	}
+}
+
+func TestService_CreateOrUpdateNote_NoApplyWhenTypeEmpty(t *testing.T) {
+	vault := &fakeVault{}
+	svc := NewService(nil, vault)
+
+	note := Note{
+		Title:   "Plain Note",
+		Content: "body",
+	}
+	_, err := svc.CreateOrUpdateNote(context.Background(), "/vault", note)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vault.lastNote.Frontmatter != nil {
+		t.Errorf("expected nil frontmatter for note without type, got %v", vault.lastNote.Frontmatter)
 	}
 }

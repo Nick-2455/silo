@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/Nick-2455/silo/internal/knowledge/notemodel"
 )
 
 // EngramReader reads knowledge items from Engram.
@@ -110,9 +112,18 @@ func (s *Service) SearchVault(ctx context.Context, vaultPath, query string, limi
 }
 
 // CreateOrUpdateNote writes a single note safely.
+// When note.Type is non-empty, community note-model defaults are merged into
+// the frontmatter before the note is written.
 func (s *Service) CreateOrUpdateNote(ctx context.Context, vaultPath string, note Note) (NoteWriteResult, error) {
 	if s.Vault == nil {
 		return NoteWriteResult{}, errors.New("knowledge: vault is not configured")
+	}
+	if note.Type != "" {
+		note.Frontmatter = notemodel.ApplyDefaults(
+			notemodel.Type(note.Type),
+			note.Kind,
+			note.Frontmatter,
+		)
 	}
 	return s.Vault.CreateOrUpdateNote(ctx, vaultPath, note)
 }
@@ -152,6 +163,9 @@ func (s *Service) GetKnowledgeContext(ctx context.Context, req ContextRequest) (
 	return context, nil
 }
 
+// noteFromKnowledge converts an Engram knowledge item into a vault note.
+// When the item carries a recognized community note type, notemodel defaults
+// are applied to enrich the frontmatter.
 func noteFromKnowledge(item KnowledgeItem) Note {
 	frontmatter := map[string]any{
 		"source": "engram",
@@ -165,6 +179,12 @@ func noteFromKnowledge(item KnowledgeItem) Note {
 	if item.Project != "" {
 		frontmatter["project"] = item.Project
 	}
+
+	noteType := notemodel.Type(item.Type)
+	if notemodel.ValidType(noteType) {
+		frontmatter = notemodel.ApplyDefaults(noteType, "", frontmatter)
+	}
+
 	content := item.Content
 	if content == "" {
 		content = item.Preview

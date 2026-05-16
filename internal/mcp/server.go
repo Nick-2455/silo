@@ -53,6 +53,10 @@ func NewServer() *server.MCPServer {
 	s.AddTool(createOrUpdateNoteTool(), handleCreateOrUpdateNote)
 	s.AddTool(getKnowledgeContextTool(), handleGetKnowledgeContext)
 
+	// Community note model tools
+	s.AddTool(listNoteTemplatesTool(), handleListNoteTemplates)
+	s.AddTool(getNoteTemplateTool(), handleGetNoteTemplate)
+
 	return s
 }
 
