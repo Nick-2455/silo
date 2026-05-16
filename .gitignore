@@ -9,3 +9,6 @@ silo
 
 # OS
 .DS_Store
+
+# Local agent metadata
+.atl/
