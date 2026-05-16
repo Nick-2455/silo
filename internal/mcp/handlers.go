@@ -18,6 +18,9 @@ type Deps struct {
 	Engram     domain.EngramClient
 	Store      domain.ResourceStore
 	GraphStore domain.GraphStore
+	Knowledge  KnowledgeService
+	Config     domain.Config
+	VaultPath  VaultResolver
 }
 
 // NewDeps creates handler dependencies from app.Deps.
@@ -26,6 +29,8 @@ func NewDeps(d *app.Deps) *Deps {
 		Engram:     d.Engram,
 		Store:      d.Store,
 		GraphStore: d.GraphStore,
+		Knowledge:  d.Knowledge,
+		Config:     d.Config,
 	}
 }
 
@@ -200,9 +205,9 @@ func handleTriage(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 // resultFromResources formats a resource list as JSON for MCP response.
 func resultFromResources(resources []domain.Resource, degraded bool) (*mcp.CallToolResult, error) {
 	result := map[string]any{
-		"results":    resources,
-		"count":      len(resources),
-		"degraded":   degraded,
+		"results":  resources,
+		"count":    len(resources),
+		"degraded": degraded,
 	}
 	if degraded {
 		result["warning"] = "Engram unreachable — showing cached results"

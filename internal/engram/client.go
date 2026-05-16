@@ -251,6 +251,13 @@ func (c *MCPClient) Close() error {
 	return c.client.Close()
 }
 
+// CallTool exposes a generic MCP tool call so other packages can reuse the connection.
+// Errors from the transport bubble up; tool-level errors are surfaced as `IsError` results.
+func (c *MCPClient) CallTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, _ := req.Params.Arguments.(map[string]any)
+	return c.callTool(ctx, req.Params.Name, args)
+}
+
 // callTool executes an MCP tool call with a timeout.
 func (c *MCPClient) callTool(ctx context.Context, name string, args map[string]any) (*mcp.CallToolResult, error) {
 	c.mu.Lock()
@@ -432,7 +439,7 @@ func parseMemoryBlock(block string) domain.Resource {
 func parseHeaderLine(line string) domain.Resource {
 	var r domain.Resource
 
-	// Extract "#ID" 
+	// Extract "#ID"
 	if idx := strings.Index(line, "#"); idx >= 0 {
 		rest := line[idx+1:]
 		if space := strings.IndexAny(rest, " \t("); space > 0 {

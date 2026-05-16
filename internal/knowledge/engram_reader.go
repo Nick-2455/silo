@@ -55,7 +55,7 @@ func (r *EngramMCPReader) ReadKnowledge(ctx context.Context, q EngramQuery) ([]K
 	if err != nil {
 		return nil, fmt.Errorf("engram mem_search: %w", err)
 	}
-	if result.IsError {
+	if result != nil && result.IsError {
 		return nil, fmt.Errorf("engram mem_search returned error: %s", extractResultText(result))
 	}
 

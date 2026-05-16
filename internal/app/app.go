@@ -7,6 +7,7 @@ import (
 	"github.com/Nick-2455/silo/internal/config"
 	"github.com/Nick-2455/silo/internal/domain"
 	"github.com/Nick-2455/silo/internal/engram"
+	"github.com/Nick-2455/silo/internal/knowledge"
 	"github.com/Nick-2455/silo/internal/store"
 )
 
@@ -17,6 +18,7 @@ type Deps struct {
 	Engram     domain.EngramClient
 	Loader     domain.ConfigLoader
 	GraphStore domain.GraphStore
+	Knowledge  *knowledge.Service
 }
 
 // Bootstrap initializes all application dependencies.
@@ -68,6 +70,15 @@ func Bootstrap() (*Deps, error) {
 		Engram:     engramClient,
 		Loader:     loader,
 		GraphStore: s,
+	}
+
+	if mcpClient, ok := engramClient.(knowledge.MCPCaller); ok {
+		deps.Knowledge = knowledge.NewService(
+			knowledge.NewEngramMCPReader(mcpClient),
+			knowledge.VaultStore{},
+		)
+	} else {
+		deps.Knowledge = knowledge.NewService(nil, knowledge.VaultStore{})
 	}
 
 	// 4. Seed demo data if graph is empty (before TUI starts — no contention)
